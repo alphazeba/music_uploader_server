@@ -1,0 +1,8 @@
+[default]
+upload_dir = "./testMusic"
+valid_extensions = ["mp3","wav", "wave", "m4a"]
+max_mb = 100
+port = 5046 # song
+
+[release]
+upload_dir = "/rdata/plex/media/music"

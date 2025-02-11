@@ -1,0 +1,8 @@
+curl localhost:8000/artist/test/album/test/file/test.txt \
+-X POST \
+--data-binary @test.txt
+
+
+authorization=$(echo "admin:default" | base64)
+curl localhost:8000 \
+-H "Authorization: Basic $authorization"
