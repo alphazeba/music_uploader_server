@@ -15,6 +15,10 @@ pub enum MusicUploaderServerError {
     SerdeIssue(Box<Error>),
     #[error("issue parsing the directory")]
     ValidateDirectoryError(Box<ValidateDirectoryError>),
+    #[error("There was an internal server that was not a customer issue")]
+    InternalServerError,
+    #[error("plex is complaining with status: ({0})")]
+    PlexComplaint(u16),
 }
 
 pub fn to_json(obj: &impl Serialize) -> Result<String, MusicUploaderServerError>  {

@@ -1,0 +1,11 @@
+[default]
+upload_dir = "./testMusic"
+valid_extensions = ["mp3","wav", "wave", "m4a"]
+max_mb = 100
+port = 5046 # song
+plex_server_token = "abc"
+plex_url = "http://localhost:32400"
+plex_music_library_id = 1
+
+[release]
+upload_dir = "/rdata/plex/media/music"
