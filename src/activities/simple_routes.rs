@@ -1,7 +1,6 @@
 use rocket::{get, State};
 use rust_fuzzy_search::fuzzy_search_best_n;
-use serde::{Deserialize, Serialize};
-use crate::{authenticated::Authenticated, config::server_config::ServerConfig, model::MusicUploaderError, path_utils};
+use crate::{authenticated::Authenticated, config::server_config::ServerConfig, model::{AlbumSearchResponse, MusicUploaderError}, path_utils};
 
 
 #[get("/auth")]
@@ -12,11 +11,6 @@ pub fn check_auth(_auth: Authenticated) -> &'static str {
 #[get("/conn")]
 pub fn check_conn() -> &'static str {
     "hello"
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct AlbumSearchResponse {
-    pub albums: Vec<String>,
 }
 
 #[get("/albumsearch/<album>")]

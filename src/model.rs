@@ -2,7 +2,7 @@ use rocket::{http::{ContentType, Status}, response::Responder, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::error::Error;
 use thiserror::Error;
-use crate::{activities::simple_routes::AlbumSearchResponse, path_utils::ValidateDirectoryError};
+use crate::path_utils::ValidateDirectoryError;
 
 #[derive(Error, Debug)]
 pub enum HeaderError {
@@ -24,6 +24,11 @@ pub enum MusicUploaderError {
     PlexComplaint(u16),
     #[error("There was an internal server that was not a customer issue. Reason: {0}")]
     InternalServerError(String),
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AlbumSearchResponse {
+    pub albums: Vec<String>,
 }
 
 pub fn to_json(obj: &impl Serialize) -> Result<String, MusicUploaderError>  {
