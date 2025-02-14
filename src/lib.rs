@@ -18,8 +18,8 @@ pub fn build_rocket() -> Rocket<Build> {
     let authenticator= Authenticator::new()
         .expect("cannot run server without authenticator must look into issues");
     rocket::build()
-        .register("/", catchers![unauthorized])
-        .mount("/", routes![
+        .register("/api", catchers![unauthorized])
+        .mount("/api", routes![
             check_conn, 
             check_auth, 
             upload,
