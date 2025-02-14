@@ -2,7 +2,7 @@ use rocket::{futures::TryFutureExt, tokio::fs};
 use std::{ffi::OsStr, fs::read_dir, path::Path};
 use thiserror::Error;
 
-use crate::server_config::ServerConfig;
+use crate::config::server_config::ServerConfig;
 
 #[derive(Error, Debug)]
 pub enum ValidateDirectoryError {

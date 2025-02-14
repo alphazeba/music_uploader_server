@@ -8,7 +8,7 @@ use rocket::{
 use rocket_basicauth::BasicAuth;
 use thiserror::Error;
 
-use crate::users::load_users;
+use crate::config::secrets_config::load_users;
 
 pub struct Authenticated {
     pub username: String,
@@ -65,7 +65,7 @@ pub struct Authenticator {
 
 impl Authenticator {
     pub fn new() -> Result<Self, AuthError> {
-        let users = load_users(&"./Users.toml".to_string());
+        let users = load_users(&"./Secrets.toml".to_string());
         Ok(Authenticator {
             users: users.users.into_iter()
                 .map(|user| (user.username, user.password))

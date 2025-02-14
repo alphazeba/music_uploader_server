@@ -6,7 +6,7 @@ use thiserror::Error;
 use music_uploader_server::{authenticated::{Authenticated, Authenticator}, path_utils};
 use music_uploader_server::path_utils::build_and_validate_path;
 use music_uploader_server::model::{AlbumSearchResponse, MusicUploaderServerError};
-use music_uploader_server::server_config::ServerConfig;
+use music_uploader_server::config::server_config::ServerConfig;
 
 #[macro_use]
 extern crate rocket;
