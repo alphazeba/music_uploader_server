@@ -56,7 +56,7 @@ async fn upload_inner(
         ValidateDirectoryError::FileAlreadyExists => MusicUploaderError::SongAlreadyExists,
         e => MusicUploaderError::ValidateDirectoryError(Box::new(e))
     })?;
-    println!("using directory: {}", dir)
+    println!("using directory: {}", dir);
     let incoming_data = data.open(server_config.max_mb.megabytes());
     let bytes = incoming_data.into_bytes().await
         .map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;
