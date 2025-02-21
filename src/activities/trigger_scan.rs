@@ -1,6 +1,6 @@
 use std::path::Path;
 use reqwest::Client;
-use rocket::{futures::FutureExt, post, State};
+use rocket::{post, State};
 use crate::{authenticated::Authenticated, config::server_config::ServerConfig, model::MusicUploaderError};
 
 #[post("/triggerscan")]
@@ -20,25 +20,22 @@ pub async fn trigger_scan(
             println!("{}", message);
             MusicUploaderError::InternalServerError(message.to_string())
         })?;
-    let _ = client.get(path)
+    match client.get(path)
         .query(&[("X-Plex-Token", &server_config.plex_server_token)])
         .send()
-        .then(|result| async {
-            match result {
-                Ok(response) => {
-                    if !response.status().is_success() {
-                        println!("plex error: {}", response.status().as_u16());
-                        return Err(MusicUploaderError::PlexComplaint(response.status().as_u16()))
-                    } else {
-                        println!("plex successfully scanned :)");
-                        return Ok("successful scan".to_string())
-                    }
-                }
-                Err(e) => {
-                    println!("there was an error reaching out to plex to trigger scan: {}", e.to_string());
-                    Err(MusicUploaderError::InternalServerError(e.to_string()))
+        .await {
+            Ok(response) => {
+                if !response.status().is_success() {
+                    println!("plex error: {}", response.status().as_u16());
+                    return Err(MusicUploaderError::PlexComplaint(response.status().as_u16()))
+                } else {
+                    println!("plex successfully scanned :)");
+                    return Ok("successful scan".to_string())
                 }
             }
-        });
-    Ok("Succesfully requested a scan to trigger. this does not mean the scan succeeded".to_string())
+            Err(e) => {
+                println!("there was an error reaching out to plex to trigger scan: {}", e.to_string());
+                Err(MusicUploaderError::InternalServerError(e.to_string()))
+            }
+        }
 }

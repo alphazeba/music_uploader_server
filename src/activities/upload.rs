@@ -7,7 +7,7 @@ use rocket::data::{Data, ToByteUnit};
 use rocket::request::FromRequest;
 
 use crate::model::{HeaderError, MusicUploaderError};
-use crate::path_utils::build_and_validate_path;
+use crate::path_utils::{build_and_validate_path, ValidateDirectoryError};
 use crate::config::server_config::ServerConfig;
 use crate::authenticated::Authenticated;
 
@@ -31,6 +31,10 @@ pub async fn upload(
             println!("success :3");
             Ok(x)
         }
+        Err(MusicUploaderError::SongAlreadyExists) => {
+            println!("Assuming success since song already existed");
+            Ok(MusicUploaderError::SongAlreadyExists.to_string())
+        }
         Err(e) => {
             println!("error: {}", e.to_string());
             Err(e)
@@ -48,8 +52,11 @@ async fn upload_inner(
         &headers.artist,
         &headers.album,
         &headers.file_name,
-    ).await.map_err(|e| MusicUploaderError::ValidateDirectoryError(Box::new(e)))?;
-    println!("using directory: {}", dir);
+    ).await.map_err(|e| match e {
+        ValidateDirectoryError::FileAlreadyExists => MusicUploaderError::SongAlreadyExists,
+        e => MusicUploaderError::ValidateDirectoryError(Box::new(e))
+    })?;
+    println!("using directory: {}", dir)
     let incoming_data = data.open(server_config.max_mb.megabytes());
     let bytes = incoming_data.into_bytes().await
         .map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;

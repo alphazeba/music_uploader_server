@@ -15,6 +15,8 @@ pub enum MusicUploaderError {
     // user issue
     #[error("issue parsing the directory")]
     ValidateDirectoryError(Box<ValidateDirectoryError>),
+    #[error("Song already exists")]
+    SongAlreadyExists,
     #[error("Constraint violation: {0}")]
     ConstraintViolation(String),
     // not user issue
