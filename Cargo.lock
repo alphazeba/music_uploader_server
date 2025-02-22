@@ -1020,6 +1020,7 @@ dependencies = [
 name = "music_uploader_server"
 version = "0.1.0"
 dependencies = [
+ "lazy_static",
  "reqwest",
  "rocket",
  "rocket-basicauth",

@@ -13,14 +13,14 @@ pub enum HeaderError {
 #[derive(Error, Debug)]
 pub enum MusicUploaderError {
     // user issue
-    #[error("issue parsing the directory")]
+    #[error("issue parsing the directory: {0}")]
     ValidateDirectoryError(Box<ValidateDirectoryError>),
     #[error("Song already exists")]
     SongAlreadyExists,
     #[error("Constraint violation: {0}")]
     ConstraintViolation(String),
     // not user issue
-    #[error("issue parsing serailizing the item")]
+    #[error("serde issue: {0}")]
     SerdeIssue(Box<Error>),
     #[error("plex is complaining with status: ({0})")]
     PlexComplaint(u16),
@@ -58,5 +58,18 @@ impl<'r> Responder<'r, 'static> for MusicUploaderError {
             .header(ContentType::new("application", "json"))
             .status(Status::InternalServerError)
             .ok()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_error_prints_boxed_error() {
+        let err = MusicUploaderError::ValidateDirectoryError(Box::new(
+            ValidateDirectoryError::FileAlreadyExists
+        ));
+        assert_eq!("issue parsing the directory: File already exists".to_string(), err.to_string());
     }
 }

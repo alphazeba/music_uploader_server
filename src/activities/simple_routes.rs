@@ -5,6 +5,7 @@ use crate::{authenticated::Authenticated, config::server_config::ServerConfig, m
 
 #[get("/auth")]
 pub fn check_auth(_auth: Authenticated) -> &'static str {
+    println!("{} checked auth", _auth.username);
     "hello"
 }
 

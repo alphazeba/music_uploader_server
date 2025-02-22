@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fmt, fs};
 use std::io::Write;
 
 use rocket::http::HeaderMap;
@@ -18,6 +18,15 @@ pub struct UploadHeaders {
     artist: String,
 }
 
+impl fmt::Debug for UploadHeaders {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UploadHeaders")
+            .field("file_name", &self.file_name)
+            .field("album", &self.album)
+            .field("artist", &self.artist).finish()
+    }
+}
+
 #[post("/upload", data = "<data>")]
 pub async fn upload(
     auth: Authenticated,
@@ -25,7 +34,7 @@ pub async fn upload(
     headers: UploadHeaders,
     data: Data<'_>,
 ) -> Result<String, MusicUploaderError> {
-    println!("\n{} is trying to upload {}", auth.username, headers.file_name);
+    println!("\n{} is trying to upload {:?}", auth.username, headers);
     match upload_inner(server_config, headers, data).await {
         Ok(x) => {
             println!("success :3");
@@ -56,7 +65,7 @@ async fn upload_inner(
         ValidateDirectoryError::FileAlreadyExists => MusicUploaderError::SongAlreadyExists,
         e => MusicUploaderError::ValidateDirectoryError(Box::new(e))
     })?;
-    println!("using directory: {}", dir);
+    println!("using directory: {}", dir.to_str().unwrap_or("<no dir?>"));
     let incoming_data = data.open(server_config.max_mb.megabytes());
     let bytes = incoming_data.into_bytes().await
         .map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;
