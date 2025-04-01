@@ -17,6 +17,7 @@ fn unauthorized() -> String {
 }
 
 pub fn build_rocket() -> Rocket<Build> {
+    println!("starting musicuploader server, version: {}", env!("CARGO_PKG_VERSION"));
     config_env_or_panic();
     let authenticator= Authenticator::new()
         .expect("cannot run server without authenticator must look into issues");
