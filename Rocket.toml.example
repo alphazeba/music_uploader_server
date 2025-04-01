@@ -6,6 +6,7 @@ port = 5046 # song
 plex_server_token = "abc"
 plex_url = "http://localhost:32400"
 plex_music_library_id = 1
+server_db_dir = "./metrics.db"
 
 [release]
 upload_dir = "/rdata/plex/media/music"

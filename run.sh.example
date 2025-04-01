@@ -1,0 +1,3 @@
+#! /bin/bash
+export MUSIC_ENV=/path/to/where/the/configs/at
+/path/to/executable/music_uploader_server
