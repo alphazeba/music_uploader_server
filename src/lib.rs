@@ -1,4 +1,4 @@
-use activities::{simple_routes::{album_search, check_auth, check_conn}, trigger_scan::trigger_scan, upload::upload};
+use activities::{simple_routes::{check_auth, check_conn}, trigger_scan::trigger_scan, upload::upload};
 use authenticated::Authenticator;
 use config::server_config::ServerConfig;
 use rocket::{catch, catchers, fairing::AdHoc, routes, Build, Rocket};
@@ -8,6 +8,7 @@ mod path_utils;
 mod authenticated;
 mod config;
 mod activities;
+mod data;
 
 #[catch(401)]
 fn unauthorized() -> String {
@@ -23,7 +24,6 @@ pub fn build_rocket() -> Rocket<Build> {
             check_conn, 
             check_auth, 
             upload,
-            album_search,
             trigger_scan,
         ])
         .attach(AdHoc::config::<ServerConfig>())

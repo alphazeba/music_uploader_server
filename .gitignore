@@ -2,3 +2,5 @@
 Secrets.toml
 Rocket.toml
 /testMusic/*
+testDb.db
+.DS_Store

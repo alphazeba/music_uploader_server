@@ -10,6 +10,7 @@ use crate::model::{HeaderError, MusicUploaderError};
 use crate::path_utils::{build_and_validate_path, ValidateDirectoryError};
 use crate::config::server_config::ServerConfig;
 use crate::authenticated::Authenticated;
+use crate::data::metrics::Metrics;
 
 pub struct UploadHeaders {
     hash: String,
@@ -34,8 +35,13 @@ pub async fn upload(
     headers: UploadHeaders,
     data: Data<'_>,
 ) -> Result<String, MusicUploaderError> {
-    println!("\n{} is trying to upload {:?}", auth.username, headers);
-    match upload_inner(server_config, headers, data).await {
+    println!("\n{} is trying to upload {:?}", &auth.username, headers);
+    match upload_inner(
+        server_config,
+        headers,
+        data,
+        &auth.username
+    ).await {
         Ok(x) => {
             println!("success :3");
             Ok(x)
@@ -55,6 +61,7 @@ async fn upload_inner(
     server_config: &State<ServerConfig>,
     headers: UploadHeaders,
     data: Data<'_>,
+    username: &String,
 ) -> Result<String, MusicUploaderError> {
     let dir = build_and_validate_path(
         server_config,
@@ -65,7 +72,8 @@ async fn upload_inner(
         ValidateDirectoryError::FileAlreadyExists => MusicUploaderError::SongAlreadyExists,
         e => MusicUploaderError::ValidateDirectoryError(Box::new(e))
     })?;
-    println!("using directory: {}", dir.to_str().unwrap_or("<no dir?>"));
+    let dir_str = dir.to_str().unwrap_or("<no dir?>").to_string();
+    println!("using directory: {}", &dir_str);
     let incoming_data = data.open(server_config.max_mb.megabytes());
     let bytes = incoming_data.into_bytes().await
         .map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;
@@ -81,7 +89,14 @@ async fn upload_inner(
         .open(dir).map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;
     let _ = file.write_all(&bytes)
         .map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;
+    metric(&server_config.server_db_dir, &dir_str, username);
     Ok(format!("uploaded file: {}", headers.file_name))
+}
+
+fn metric(db_path: &String, song_path: &String, user: &String) {
+    let metrics = Metrics::new(db_path);
+    let _ = metrics.note_route(&"upload".to_string(), user);
+    let _ = metrics.note_upload(song_path, user);
 }
 
 fn check_hash(sent_hash: String, file: &Vec<u8>) -> bool {

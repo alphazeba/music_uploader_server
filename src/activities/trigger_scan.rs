@@ -1,7 +1,7 @@
 use std::path::Path;
 use reqwest::Client;
 use rocket::{post, State};
-use crate::{authenticated::Authenticated, config::server_config::ServerConfig, model::MusicUploaderError};
+use crate::{authenticated::Authenticated, config::server_config::ServerConfig, data::metrics::Metrics, model::MusicUploaderError};
 
 #[post("/triggerscan")]
 pub async fn trigger_scan(
@@ -20,6 +20,7 @@ pub async fn trigger_scan(
             println!("{}", message);
             MusicUploaderError::InternalServerError(message.to_string())
         })?;
+    metric(&server_config.server_db_dir, &auth.username);
     match client.get(path)
         .query(&[("X-Plex-Token", &server_config.plex_server_token)])
         .send()
@@ -38,4 +39,9 @@ pub async fn trigger_scan(
                 Err(MusicUploaderError::InternalServerError(e.to_string()))
             }
         }
+}
+
+fn metric(db_path: &String, user: &String) {
+    let metrics = Metrics::new(db_path);
+    let _ = metrics.note_route(&"triggerScan".to_string(), user);
 }
