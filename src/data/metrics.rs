@@ -52,8 +52,8 @@ impl Metrics {
     }
 }
 
-fn get_now_timestamp() -> OffsetDateTime {
-    OffsetDateTime::now_utc()
+fn get_now_timestamp() -> i64 {
+    OffsetDateTime::now_utc().unix_timestamp()
 }
 
 #[cfg(test)]
