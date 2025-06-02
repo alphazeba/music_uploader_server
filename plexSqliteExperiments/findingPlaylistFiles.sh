@@ -41,3 +41,6 @@ select * from media_parts left outer join media_items on
   media_items.id = media_parts.media_item_id
 
 PRAGMA table_info(play_queue_generators);
+
+
+# list albums in the plex db.

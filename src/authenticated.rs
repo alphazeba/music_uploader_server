@@ -39,7 +39,9 @@ impl<'r> Authenticated {
         let authenticator = Self::get_authenticator(req)?;
         let user_auth = Self::get_incoming_basic_auth(req).await?;
         match authenticator.is_authenticated(&user_auth) {
-            true => Ok(Authenticated {username: user_auth.username}),
+            true => Ok(Authenticated {
+                username: user_auth.username,
+            }),
             false => Err(AuthError::FailedToAuthorize),
         }
     }
@@ -67,20 +69,19 @@ impl Authenticator {
     pub fn new() -> Result<Self, AuthError> {
         let users = load_users(&"./Secrets.toml".to_string());
         Ok(Authenticator {
-            users: users.users.into_iter()
+            users: users
+                .users
+                .into_iter()
                 .map(|user| (user.username, user.password))
                 .collect(),
         })
     }
 
     fn is_authenticated(&self, auth: &BasicAuth) -> bool {
-        let fake_password= "fake password".to_string();
-        let testing_password = self.users
-            .get(&auth.username)
-            .unwrap_or(&fake_password);
+        let fake_password = "fake password".to_string();
+        let testing_password = self.users.get(&auth.username).unwrap_or(&fake_password);
         let user_was_found = self.users.contains_key(&auth.username);
-        let password_is_correct = Self::compare_str(
-            testing_password, &auth.password);
+        let password_is_correct = Self::compare_str(testing_password, &auth.password);
         user_was_found && password_is_correct
     }
 
@@ -88,5 +89,3 @@ impl Authenticator {
         a.trim() == b.trim()
     }
 }
-
-

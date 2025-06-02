@@ -1,6 +1,5 @@
-use rocket::get;
 use crate::authenticated::Authenticated;
-
+use rocket::get;
 
 #[get("/auth")]
 pub fn check_auth(_auth: Authenticated) -> &'static str {

@@ -1,16 +1,16 @@
-use std::{fmt, fs};
 use std::io::Write;
+use std::{fmt, fs};
 
-use rocket::http::HeaderMap;
-use rocket::{http, post, request, Request, State};
 use rocket::data::{Data, ToByteUnit};
+use rocket::http::HeaderMap;
 use rocket::request::FromRequest;
+use rocket::{http, post, request, Request, State};
 
+use crate::authenticated::Authenticated;
+use crate::config::server_config::ServerConfig;
+use crate::data::metrics::Metrics;
 use crate::model::{HeaderError, MusicUploaderError};
 use crate::path_utils::{build_and_validate_path, ValidateDirectoryError};
-use crate::config::server_config::ServerConfig;
-use crate::authenticated::Authenticated;
-use crate::data::metrics::Metrics;
 
 pub struct UploadHeaders {
     hash: String,
@@ -24,7 +24,8 @@ impl fmt::Debug for UploadHeaders {
         f.debug_struct("UploadHeaders")
             .field("file_name", &self.file_name)
             .field("album", &self.album)
-            .field("artist", &self.artist).finish()
+            .field("artist", &self.artist)
+            .finish()
     }
 }
 
@@ -36,12 +37,7 @@ pub async fn upload(
     data: Data<'_>,
 ) -> Result<String, MusicUploaderError> {
     println!("\n{} is trying to upload {:?}", &auth.username, headers);
-    match upload_inner(
-        server_config,
-        headers,
-        data,
-        &auth.username
-    ).await {
+    match upload_inner(server_config, headers, data, &auth.username).await {
         Ok(x) => {
             println!("success :3");
             Ok(x)
@@ -68,26 +64,36 @@ async fn upload_inner(
         &headers.artist,
         &headers.album,
         &headers.file_name,
-    ).await.map_err(|e| match e {
+    )
+    .await
+    .map_err(|e| match e {
         ValidateDirectoryError::FileAlreadyExists => MusicUploaderError::SongAlreadyExists,
-        e => MusicUploaderError::ValidateDirectoryError(Box::new(e))
+        e => MusicUploaderError::ValidateDirectoryError(Box::new(e)),
     })?;
     let dir_str = dir.to_str().unwrap_or("<no dir?>").to_string();
     println!("using directory: {}", &dir_str);
     let incoming_data = data.open(server_config.max_mb.megabytes());
-    let bytes = incoming_data.into_bytes().await
+    let bytes = incoming_data
+        .into_bytes()
+        .await
         .map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;
     if !bytes.is_complete() {
-        return Err(MusicUploaderError::ConstraintViolation("File uploaded is too large".to_string()));
+        return Err(MusicUploaderError::ConstraintViolation(
+            "File uploaded is too large".to_string(),
+        ));
     }
     if !check_hash(headers.hash, &bytes.value) {
-        return Err(MusicUploaderError::ConstraintViolation("Hash check failed".to_string()));
+        return Err(MusicUploaderError::ConstraintViolation(
+            "Hash check failed".to_string(),
+        ));
     }
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(dir).map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;
-    let _ = file.write_all(&bytes)
+        .open(dir)
+        .map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;
+    let _ = file
+        .write_all(&bytes)
         .map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;
     metric(&server_config.server_db_dir, &dir_str, username);
     Ok(format!("uploaded file: {}", headers.file_name))
@@ -127,7 +133,8 @@ impl<'r> UploadHeaders {
     }
 
     fn get_header_string(headers: &HeaderMap, key: &str) -> Result<String, HeaderError> {
-        Ok(headers.get_one(key)
+        Ok(headers
+            .get_one(key)
             .ok_or(HeaderError::ParsingIssue)?
             .to_string())
     }

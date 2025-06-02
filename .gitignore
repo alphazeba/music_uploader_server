@@ -4,3 +4,4 @@ Rocket.toml
 /testMusic/*
 testDb.db
 .DS_Store
+/personal

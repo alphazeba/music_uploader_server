@@ -1,8 +1,12 @@
-use rocket::{http::{ContentType, Status}, response::Responder, Response};
+use crate::path_utils::ValidateDirectoryError;
+use rocket::{
+    http::{ContentType, Status},
+    response::Responder,
+    Response,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::error::Error;
 use thiserror::Error;
-use crate::path_utils::ValidateDirectoryError;
 
 #[derive(Error, Debug)]
 pub enum HeaderError {
@@ -26,22 +30,26 @@ pub enum MusicUploaderError {
     PlexComplaint(u16),
     #[error("There was an internal server that was not a customer issue. Reason: {0}")]
     InternalServerError(String),
+    #[error("Could not find value in uploader db")]
+    UploaderDataIncomplete,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct AlbumSearchResponse {
-    pub albums: Vec<String>,
+    pub album: String,
+    pub uploader: String,
 }
 
-pub fn to_json(obj: &impl Serialize) -> Result<String, MusicUploaderError>  {
+pub fn to_json(obj: &impl Serialize) -> Result<String, MusicUploaderError> {
     serde_json::to_string(obj).map_err(|e| MusicUploaderError::SerdeIssue(Box::new(e)))
 }
 
-pub fn from_json<'a,T: Deserialize<'a>>(json: &'a str) -> Result<T, MusicUploaderError> {
+pub fn from_json<'a, T: Deserialize<'a>>(json: &'a str) -> Result<T, MusicUploaderError> {
     serde_json::from_str::<'a, T>(json).map_err(|e| MusicUploaderError::SerdeIssue(Box::new(e)))
 }
 
-impl<'r> Responder<'r, 'static> for AlbumSearchResponse { // make this generic if there are more return types
+impl<'r> Responder<'r, 'static> for AlbumSearchResponse {
+    // make this generic if there are more return types
     fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
         let response = to_json(&self).unwrap();
         Response::build_from(response.respond_to(request)?)
@@ -68,8 +76,11 @@ mod test {
     #[test]
     fn test_error_prints_boxed_error() {
         let err = MusicUploaderError::ValidateDirectoryError(Box::new(
-            ValidateDirectoryError::FileAlreadyExists
+            ValidateDirectoryError::FileAlreadyExists,
         ));
-        assert_eq!("issue parsing the directory: File already exists".to_string(), err.to_string());
+        assert_eq!(
+            "issue parsing the directory: File already exists".to_string(),
+            err.to_string()
+        );
     }
 }

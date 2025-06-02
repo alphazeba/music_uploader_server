@@ -1,6 +1,6 @@
 [package]
 name = "music_uploader_server"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2021"
 
 [dependencies]
@@ -15,3 +15,4 @@ reqwest = { version = "0.12" }
 lazy_static = "1.5"
 rusqlite = { version = "0.34.0", features = ["bundled", "time"] }
 time = "0.3.41"
+rust-fuzzy-search = "0.1.1"

@@ -1059,13 +1059,14 @@ dependencies = [
 
 [[package]]
 name = "music_uploader_server"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "lazy_static",
  "reqwest",
  "rocket",
  "rocket-basicauth",
  "rusqlite",
+ "rust-fuzzy-search",
  "serde",
  "serde_json",
  "sha256",
@@ -1565,6 +1566,12 @@ dependencies = [
  "smallvec",
  "time",
 ]
+
+[[package]]
+name = "rust-fuzzy-search"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a157657054ffe556d8858504af8a672a054a6e0bd9e8ee531059100c0fa11bb2"
 
 [[package]]
 name = "rustc-demangle"
