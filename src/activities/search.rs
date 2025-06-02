@@ -3,10 +3,9 @@ use crate::{
     config::server_config::ServerConfig,
     data::{
         metrics::Metrics,
-        plex_db::{AlbumResult, PlexDb, SongResult},
+        plex_db::{AlbumResult, PlexDb},
     },
     model::{AlbumSearchResponse, MusicUploaderError},
-    path_utils,
 };
 use rocket::get;
 use rocket::State;
@@ -24,26 +23,33 @@ pub async fn album_search(
         println!("internal error with search");
         MusicUploaderError::InternalServerError(e.to_string())
     })?;
-    let found_album = find_searched_album_result(albums, album).map_err(|e| {
+    let found_album = find_searched_album_result(albums, album).map_err(|_e| {
         MusicUploaderError::ConstraintViolation("could not find the searched for album".to_string())
     })?;
     let album_songs = plex_db
         .get_song_files_of_album(&found_album)
         .map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;
     let metric_db = Metrics::new(&server_config.server_db_dir);
-    let upload_result = metric_db
-        .get_upload(
-            album_songs
-                .get(0)
-                .ok_or(MusicUploaderError::InternalServerError(
-                    "found album had no songs".to_string(),
-                ))?
-                .get_path(),
-        )
-        .ok_or(MusicUploaderError::UploaderDataIncomplete)?;
+    let upload_result = metric_db.get_upload(
+        album_songs
+            .get(0)
+            .ok_or(MusicUploaderError::InternalServerError(
+                "found album had no songs".to_string(),
+            ))?
+            .get_path(),
+    );
     let response = Ok(AlbumSearchResponse {
         album: found_album.get_title().to_string(),
-        uploader: upload_result.user,
+        uploader: match upload_result {
+            Some(upload_result) => upload_result.user,
+            None => {
+                println!(
+                    "there is no music upload data for ({})",
+                    found_album.get_title()
+                );
+                "Unknown".to_string()
+            }
+        },
     });
     metric(&metric_db, &auth.username, &"albumsearch".to_string());
     response

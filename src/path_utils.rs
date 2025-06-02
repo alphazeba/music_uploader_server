@@ -1,7 +1,6 @@
 use lazy_static::lazy_static;
 use rocket::tokio::fs;
 use std::collections::HashSet;
-use std::fs::read_dir;
 use std::path::PathBuf;
 use std::{ffi::OsStr, path::Path};
 use thiserror::Error;
@@ -127,27 +126,6 @@ pub async fn build_and_validate_path(
     let album_path = validate_or_create_directory(&artist_path, album).await?;
     let song_path = validate_file_does_not_exist(&album_path, filename).await?;
     Ok(song_path)
-}
-
-pub fn get_album_names(music_dir: &String) -> Result<Vec<String>, ValidateDirectoryError> {
-    let path = Path::new(music_dir);
-    let dirs = read_dir(path).map_err(|e| {
-        println!("{:?}", e);
-        ValidateDirectoryError::FailedToReadDir
-    })?;
-    let dirs = dirs
-        .into_iter()
-        .filter_map(|x| x.map_err(|e| println!("could not see file: {}", e)).ok())
-        .filter_map(|entry| {
-            let path = entry.path();
-            if path.is_dir() {
-                return path.to_str().map(|s| s.to_string());
-            } else {
-                return None;
-            }
-        })
-        .collect();
-    Ok(dirs)
 }
 
 #[cfg(test)]

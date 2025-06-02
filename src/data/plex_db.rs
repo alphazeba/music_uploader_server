@@ -1,6 +1,5 @@
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 use thiserror::Error;
-use time::OffsetDateTime;
 
 // will handle queries against plex's db.
 
