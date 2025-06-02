@@ -5,3 +5,4 @@ Rocket.toml
 testDb.db
 .DS_Store
 /personal
+run.sh
