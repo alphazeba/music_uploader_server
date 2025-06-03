@@ -5,25 +5,34 @@ use crate::{
         metrics::Metrics,
         plex_db::{AlbumResult, PlexDb},
     },
-    model::{AlbumSearchResponse, MusicUploaderError},
+    model::{AlbumSearchResponse, HeaderError, MusicUploaderError},
+    rocket_utils::get_header_string,
 };
-use rocket::get;
 use rocket::State;
+use rocket::{
+    get, http,
+    request::{self, FromRequest},
+    Request,
+};
 use rust_fuzzy_search::fuzzy_search_best_n;
 
-#[get("/albumsearch/<album>")]
+pub struct AlbumSearchHeaders {
+    album: String,
+}
+
+#[get("/albumsearch")]
 pub async fn album_search(
     auth: Authenticated,
     server_config: &State<ServerConfig>,
-    album: &str,
+    headers: AlbumSearchHeaders,
 ) -> Result<AlbumSearchResponse, MusicUploaderError> {
-    println!("{} is searching for {}", auth.username, album);
+    println!("{} is searching for {}", auth.username, headers.album);
     let plex_db = PlexDb::new(&server_config.plex_db_dir);
     let albums = plex_db.get_albums().map_err(|e| {
         println!("internal error with search");
         MusicUploaderError::InternalServerError(e.to_string())
     })?;
-    let found_album = find_searched_album_result(albums, album).map_err(|_e| {
+    let found_album = find_searched_album_result(albums, &headers.album).map_err(|_e| {
         MusicUploaderError::ConstraintViolation("could not find the searched for album".to_string())
     })?;
     let album_songs = plex_db
@@ -38,7 +47,7 @@ pub async fn album_search(
             ))?
             .get_path(),
     );
-    let response = Ok(AlbumSearchResponse {
+    let response = AlbumSearchResponse {
         album: found_album.get_title().to_string(),
         uploader: match upload_result {
             Some(upload_result) => upload_result.user,
@@ -50,9 +59,13 @@ pub async fn album_search(
                 "Unknown".to_string()
             }
         },
-    });
+    };
     metric(&metric_db, &auth.username, &"albumsearch".to_string());
-    response
+    println!(
+        "found ({}) uploaded by {}",
+        response.album, response.uploader
+    );
+    Ok(response)
 }
 
 fn find_searched_album_result(albums: Vec<AlbumResult>, album: &str) -> Result<AlbumResult, ()> {
@@ -78,4 +91,24 @@ fn find_searched_album_result(albums: Vec<AlbumResult>, album: &str) -> Result<A
 
 fn metric(metric_db: &Metrics, user: &String, route: &String) {
     let _ = metric_db.note_route(route, user);
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for AlbumSearchHeaders {
+    type Error = HeaderError;
+    async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+        match Self::from_request_inner(req).await {
+            Ok(a) => request::Outcome::Success(a),
+            Err(e) => request::Outcome::Error((http::Status::Unauthorized, e)),
+        }
+    }
+}
+
+impl<'r> AlbumSearchHeaders {
+    async fn from_request_inner(req: &'r Request<'_>) -> Result<Self, HeaderError> {
+        let headers = req.headers();
+        Ok(AlbumSearchHeaders {
+            album: get_header_string(headers, "album")?,
+        })
+    }
 }

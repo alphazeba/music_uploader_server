@@ -15,6 +15,7 @@ mod config;
 mod data;
 pub mod model;
 mod path_utils;
+mod rocket_utils;
 
 #[catch(401)]
 fn unauthorized() -> String {

@@ -2,7 +2,6 @@ use std::io::Write;
 use std::{fmt, fs};
 
 use rocket::data::{Data, ToByteUnit};
-use rocket::http::HeaderMap;
 use rocket::request::FromRequest;
 use rocket::{http, post, request, Request, State};
 
@@ -11,6 +10,7 @@ use crate::config::server_config::ServerConfig;
 use crate::data::metrics::Metrics;
 use crate::model::{HeaderError, MusicUploaderError};
 use crate::path_utils::{build_and_validate_path, ValidateDirectoryError};
+use crate::rocket_utils::get_header_string;
 
 pub struct UploadHeaders {
     hash: String,
@@ -122,20 +122,13 @@ impl<'r> FromRequest<'r> for UploadHeaders {
 }
 
 impl<'r> UploadHeaders {
-    async fn from_request_inner(req: &'r Request<'_>) -> Result<UploadHeaders, HeaderError> {
+    async fn from_request_inner(req: &'r Request<'_>) -> Result<Self, HeaderError> {
         let headers = req.headers();
         Ok(UploadHeaders {
-            hash: Self::get_header_string(headers, "hash")?,
-            file_name: Self::get_header_string(headers, "file")?,
-            album: Self::get_header_string(headers, "album")?,
-            artist: Self::get_header_string(headers, "artist")?,
+            hash: get_header_string(headers, "hash")?,
+            file_name: get_header_string(headers, "file")?,
+            album: get_header_string(headers, "album")?,
+            artist: get_header_string(headers, "artist")?,
         })
-    }
-
-    fn get_header_string(headers: &HeaderMap, key: &str) -> Result<String, HeaderError> {
-        Ok(headers
-            .get_one(key)
-            .ok_or(HeaderError::ParsingIssue)?
-            .to_string())
     }
 }
