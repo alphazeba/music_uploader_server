@@ -101,6 +101,7 @@ impl AlbumResult {
     }
 }
 
+#[allow(unused)]
 pub struct SongResult {
     song_title: String,
     path: String,

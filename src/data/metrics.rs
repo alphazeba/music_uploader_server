@@ -80,6 +80,7 @@ impl Metrics {
     }
 }
 
+#[allow(unused)]
 pub struct GetUploadResult {
     pub user: String,
     pub path: String,
