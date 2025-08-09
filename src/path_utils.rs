@@ -7,6 +7,8 @@ use thiserror::Error;
 
 use crate::config::server_config::ServerConfig;
 
+const REPLACEMENT_CHAR: char = '_';
+const DIR_SEGMENT_HASH_LENGTH: usize = 8;
 lazy_static! {
     static ref LEGAL_CHARS: HashSet<char> = {
         let legal_chars =
@@ -17,8 +19,8 @@ lazy_static! {
         }
         set
     };
+    static ref REPLACEMENT_CHAR_STR: String = REPLACEMENT_CHAR.to_string();
 }
-const REPLACE_CHAR: char = '_';
 
 #[derive(Error, Debug)]
 pub enum ValidateDirectoryError {
@@ -28,7 +30,7 @@ pub enum ValidateDirectoryError {
     FileAlreadyExists,
     #[error("Invalid extension")]
     InvalidExtension,
-    #[error("there was no file extnesion")]
+    #[error("there was no file extension")]
     NoFileExtension,
     #[error("failed to read the dir")]
     FailedToReadDir,
@@ -82,19 +84,43 @@ fn get_file_stem_extension(file_path: &String) -> Result<(String, String), Valid
 }
 
 fn clean_dir_segment(dir_segment: &String) -> String {
+    let mut num_chars = 0;
+    let mut num_replaced_chars = 0;
     let trimmed = dir_segment.trim();
     let filtered: String = trimmed
         .chars()
-        .map(|c| match LEGAL_CHARS.contains(&c) {
-            true => c,
-            false => REPLACE_CHAR,
+        .map(|c| {
+            num_chars += 1;
+            match LEGAL_CHARS.contains(&c) {
+                true => c,
+                false => {
+                    num_replaced_chars += 1;
+                    REPLACEMENT_CHAR
+                }
+            }
         })
         .collect();
-    filtered
+    // if we've replaced at least a third of the title lets add some entropy
+    match num_chars / 3 <= num_replaced_chars {
+        true => {
+            let hash = get_dir_segment_hash(dir_segment);
+            format!("{filtered}{hash}")
+        }
+        false => filtered,
+    }
+}
+
+fn get_dir_segment_hash(string: &String) -> String {
+    let hash = sha256::digest(string.as_bytes());
+    // shorten the hash because a sha256 digest is 256 bits, 32 bytes, 64 hex characters.
+    // most entire titles will not be that long.
+    hash.chars()
+        .take(DIR_SEGMENT_HASH_LENGTH)
+        .collect::<String>()
 }
 
 fn clean_file_name(file_name: &String) -> Result<String, ValidateDirectoryError> {
-    let dir_escaped_file_name = file_name.replace('/', &REPLACE_CHAR.to_string());
+    let dir_escaped_file_name = file_name.replace('/', &REPLACEMENT_CHAR_STR);
     let (stem, extension) = get_file_stem_extension(&dir_escaped_file_name)?;
     Ok(format!(
         "{}.{}",
@@ -178,12 +204,21 @@ mod test {
     #[test]
     fn test_strings_are_escaped() {
         assert_eq!(
-            "__urmums_secret files_test_wav.mp3".to_string(),
+            "__urmums_secret files_test_wav.mp3",
             clean_file_name(&"  ~/urmums/secret files/test.wav.mp3   ".to_string()).unwrap()
         );
+        assert_eq!("thin_gy", clean_dir_segment(&"   thin*gy    ".to_string()))
+    }
+
+    #[test]
+    fn test_add_hash_to_high_replace_strings() {
         assert_eq!(
-            "thin_gy".to_string(),
-            clean_dir_segment(&"   thin*gy    ".to_string())
-        )
+            "artist_album___________ec181730.mp3",
+            clean_file_name(&"artist/album/^^^^^^^^^^.mp3".to_string()).unwrap(),
+        );
+        assert_eq!(
+            "artist_album___________3faf76b4.mp3",
+            clean_file_name(&"artist/album/&&&&&&&&&&.mp3".to_string()).unwrap(),
+        );
     }
 }
