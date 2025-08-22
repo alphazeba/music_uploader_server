@@ -116,7 +116,7 @@ impl<'r> FromRequest<'r> for UploadHeaders {
     async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
         match Self::from_request_inner(req).await {
             Ok(a) => request::Outcome::Success(a),
-            Err(e) => request::Outcome::Error((http::Status::Unauthorized, e)),
+            Err(e) => request::Outcome::Error((http::Status::BadRequest, e)),
         }
     }
 }
@@ -124,7 +124,7 @@ impl<'r> FromRequest<'r> for UploadHeaders {
 impl<'r> UploadHeaders {
     async fn from_request_inner(req: &'r Request<'_>) -> Result<Self, HeaderError> {
         let headers = req.headers();
-        Ok(UploadHeaders {
+        Ok(Self {
             hash: get_header_string(headers, "hash")?,
             file_name: get_header_string(headers, "file")?,
             album: get_header_string(headers, "album")?,

@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection};
-use time::OffsetDateTime;
+
+use crate::time_utils::get_now_timestamp;
 
 pub struct Metrics {
     conn: Connection,
@@ -63,13 +64,13 @@ impl Metrics {
         }
     }
 
-    pub fn get_upload(&self, song_path: &String) -> Option<GetUploadResult> {
+    pub fn get_upload(&self, song_path: &String) -> Option<GetUploadItem> {
         self.get_conn()
             .query_row(
                 "select user, path, timestamp from songUploads where path=?1",
                 [song_path],
                 |row| {
-                    Ok(GetUploadResult {
+                    Ok(GetUploadItem {
                         user: row.get(0)?,
                         path: row.get(1)?,
                         timestamp: row.get(2)?,
@@ -81,18 +82,16 @@ impl Metrics {
 }
 
 #[allow(unused)]
-pub struct GetUploadResult {
+pub struct GetUploadItem {
     pub user: String,
     pub path: String,
     pub timestamp: i64,
 }
 
-fn get_now_timestamp() -> i64 {
-    OffsetDateTime::now_utc().unix_timestamp()
-}
-
 #[cfg(test)]
 mod test {
+    use time::OffsetDateTime;
+
     use super::*;
 
     #[test]

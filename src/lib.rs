@@ -3,6 +3,7 @@ use activities::{
     simple_routes::{check_auth, check_conn},
     trigger_scan::trigger_scan,
     upload::upload,
+    declare_upload::declare_upload,
 };
 use authenticated::Authenticator;
 use config::server_config::ServerConfig;
@@ -16,6 +17,7 @@ mod data;
 pub mod model;
 mod path_utils;
 mod rocket_utils;
+mod time_utils;
 
 #[catch(401)]
 fn unauthorized() -> String {
@@ -34,7 +36,7 @@ pub fn build_rocket() -> Rocket<Build> {
         .register("/api", catchers![unauthorized])
         .mount(
             "/api",
-            routes![check_conn, check_auth, upload, trigger_scan, album_search,],
+            routes![check_conn, check_auth, upload, trigger_scan, album_search, declare_upload],
         )
         .attach(AdHoc::config::<ServerConfig>())
         .manage(authenticator)

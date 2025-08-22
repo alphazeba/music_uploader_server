@@ -40,6 +40,17 @@ pub struct AlbumSearchResponse {
     pub uploader: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub enum DeclareUploadResponse {
+    Complete,
+    Incomplete {
+        key: String,
+        declared_size: u32,
+        part_size: u32,
+        received_parts: Vec<u8>,
+    }
+}
+
 pub fn to_json(obj: &impl Serialize) -> Result<String, MusicUploaderError> {
     serde_json::to_string(obj).map_err(|e| MusicUploaderError::SerdeIssue(Box::new(e)))
 }
@@ -50,6 +61,16 @@ pub fn from_json<'a, T: Deserialize<'a>>(json: &'a str) -> Result<T, MusicUpload
 
 impl<'r> Responder<'r, 'static> for AlbumSearchResponse {
     // make this generic if there are more return types
+    fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
+        let response = to_json(&self).unwrap();
+        Response::build_from(response.respond_to(request)?)
+            .header(ContentType::new("application", "json"))
+            .status(Status::Ok)
+            .ok()
+    }
+}
+
+impl<'r> Responder<'r, 'static> for DeclareUploadResponse {
     fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
         let response = to_json(&self).unwrap();
         Response::build_from(response.respond_to(request)?)
