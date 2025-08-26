@@ -6,7 +6,7 @@ use crate::{
         plex_db::{AlbumResult, PlexDb},
     },
     model::{AlbumSearchResponse, HeaderError, MusicUploaderError},
-    rocket_utils::get_header_string,
+    rocket_utils::get_header_value,
 };
 use rocket::State;
 use rocket::{
@@ -108,7 +108,7 @@ impl<'r> AlbumSearchHeaders {
     async fn from_request_inner(req: &'r Request<'_>) -> Result<Self, HeaderError> {
         let headers = req.headers();
         Ok(AlbumSearchHeaders {
-            album: get_header_string(headers, "album")?,
+            album: get_header_value(headers, "album")?,
         })
     }
 }

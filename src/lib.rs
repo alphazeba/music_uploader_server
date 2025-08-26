@@ -1,19 +1,22 @@
 use activities::{
+    declare_upload::declare_upload,
     search::album_search,
     simple_routes::{check_auth, check_conn},
     trigger_scan::trigger_scan,
     upload::upload,
-    declare_upload::declare_upload,
 };
 use authenticated::Authenticator;
 use config::server_config::ServerConfig;
 use rocket::{catch, catchers, fairing::AdHoc, routes, Build, Rocket};
 use std::env;
 
+use crate::activities::upload_part::upload_part;
+
 mod activities;
 mod authenticated;
 mod config;
 mod data;
+mod data_validation;
 pub mod model;
 mod path_utils;
 mod rocket_utils;
@@ -36,7 +39,15 @@ pub fn build_rocket() -> Rocket<Build> {
         .register("/api", catchers![unauthorized])
         .mount(
             "/api",
-            routes![check_conn, check_auth, upload, trigger_scan, album_search, declare_upload],
+            routes![
+                check_conn,
+                check_auth,
+                upload,
+                trigger_scan,
+                album_search,
+                declare_upload,
+                upload_part,
+            ],
         )
         .attach(AdHoc::config::<ServerConfig>())
         .manage(authenticator)

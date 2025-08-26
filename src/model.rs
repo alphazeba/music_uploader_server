@@ -48,7 +48,7 @@ pub enum DeclareUploadResponse {
         declared_size: u32,
         part_size: u32,
         received_parts: Vec<u8>,
-    }
+    },
 }
 
 pub fn to_json(obj: &impl Serialize) -> Result<String, MusicUploaderError> {

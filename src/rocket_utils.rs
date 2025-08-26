@@ -1,21 +1,20 @@
+use std::str::FromStr;
+
 use rocket::http::HeaderMap;
 
 use crate::model::HeaderError;
 
-pub fn get_header_string(headers: &HeaderMap, key: &str) -> Result<String, HeaderError> {
-    Ok(headers
-        .get_one(key)
-        .ok_or(HeaderError::ParsingIssue)?
-        .to_string())
+fn get_header_str<'a>(headers: &'a HeaderMap, key: &str) -> Result<&'a str, HeaderError> {
+    headers.get_one(key).ok_or(HeaderError::ParsingIssue)
 }
 
-pub fn get_header_u32(headers: &HeaderMap, key: &str) -> Result<u32, HeaderError> {
-    Ok(headers.get_one(key)
-        .ok_or(HeaderError::ParsingIssue)?
-        .parse::<u32>()
-        .map_err(|e| {
-            println!("error: {e}");
-            HeaderError::ParsingIssue
-        })?
-    )
+pub fn get_header_value<T>(headers: &HeaderMap, key: &str) -> Result<T, HeaderError>
+where
+    T: FromStr,
+{
+    let value = get_header_str(headers, key)?;
+    Ok(value.parse::<T>().map_err(|_| {
+        println!("error parsing value with key: {key}, value: {value}");
+        HeaderError::ParsingIssue
+    })?)
 }

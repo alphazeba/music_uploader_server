@@ -12,4 +12,5 @@ pub struct ServerConfig {
     pub plex_server_token: String,
     pub plex_url: String,
     pub plex_music_library_id: u16,
+    pub temp_file_dir: String,
 }

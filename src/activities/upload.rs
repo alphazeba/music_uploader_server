@@ -1,5 +1,4 @@
-use std::io::Write;
-use std::{fmt, fs};
+use std::fmt;
 
 use rocket::data::{Data, ToByteUnit};
 use rocket::request::FromRequest;
@@ -8,9 +7,10 @@ use rocket::{http, post, request, Request, State};
 use crate::authenticated::Authenticated;
 use crate::config::server_config::ServerConfig;
 use crate::data::metrics::Metrics;
+use crate::data_validation::{check_hash, read_in_complete_data, write_bytes_to_new_file};
 use crate::model::{HeaderError, MusicUploaderError};
 use crate::path_utils::{build_and_validate_path, ValidateDirectoryError};
-use crate::rocket_utils::get_header_string;
+use crate::rocket_utils::get_header_value;
 
 pub struct UploadHeaders {
     hash: String,
@@ -72,29 +72,9 @@ async fn upload_inner(
     })?;
     let dir_str = dir.to_str().unwrap_or("<no dir?>").to_string();
     println!("using directory: {}", &dir_str);
-    let incoming_data = data.open(server_config.max_mb.megabytes());
-    let bytes = incoming_data
-        .into_bytes()
-        .await
-        .map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;
-    if !bytes.is_complete() {
-        return Err(MusicUploaderError::ConstraintViolation(
-            "File uploaded is too large".to_string(),
-        ));
-    }
-    if !check_hash(headers.hash, &bytes.value) {
-        return Err(MusicUploaderError::ConstraintViolation(
-            "Hash check failed".to_string(),
-        ));
-    }
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(dir)
-        .map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;
-    let _ = file
-        .write_all(&bytes)
-        .map_err(|e| MusicUploaderError::InternalServerError(e.to_string()))?;
+    let bytes = read_in_complete_data(data, server_config.max_mb.megabytes()).await?;
+    check_hash(&headers.hash, &bytes)?;
+    write_bytes_to_new_file(dir, &bytes)?;
     metric(&server_config.server_db_dir, &dir_str, username);
     Ok(format!("uploaded file: {}", headers.file_name))
 }
@@ -103,11 +83,6 @@ fn metric(db_path: &String, song_path: &String, user: &String) {
     let metrics = Metrics::new(db_path);
     let _ = metrics.note_route(&"upload".to_string(), user);
     let _ = metrics.note_upload(song_path, user);
-}
-
-fn check_hash(sent_hash: String, file: &Vec<u8>) -> bool {
-    let computed_hash = sha256::digest(file);
-    sent_hash == computed_hash
 }
 
 #[rocket::async_trait]
@@ -125,10 +100,10 @@ impl<'r> UploadHeaders {
     async fn from_request_inner(req: &'r Request<'_>) -> Result<Self, HeaderError> {
         let headers = req.headers();
         Ok(Self {
-            hash: get_header_string(headers, "hash")?,
-            file_name: get_header_string(headers, "file")?,
-            album: get_header_string(headers, "album")?,
-            artist: get_header_string(headers, "artist")?,
+            hash: get_header_value(headers, "hash")?,
+            file_name: get_header_value(headers, "file")?,
+            album: get_header_value(headers, "album")?,
+            artist: get_header_value(headers, "artist")?,
         })
     }
 }
