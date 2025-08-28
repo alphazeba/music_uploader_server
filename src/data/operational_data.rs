@@ -27,10 +27,10 @@ impl OperationalData {
             .execute(
                 "create table if not exists uploadPart \
                 (parentKey TEXT not null, \
-                index INTEGER not null, \
+                pindex INTEGER not null, \
                 partHash TEXT not null, \
                 timestamp DATE not null, \
-                PRIMARY KEY (parentKey, index))",
+                PRIMARY KEY (parentKey, pindex))",
                 [],
             )
             .expect("could not create table :(");
@@ -116,7 +116,7 @@ impl OperationalData {
         match self
             .get_conn()
             .query_row(
-                "select count(*) from uploadPart where parentKey=?1 and index=?2",
+                "select count(*) from uploadPart where parentKey=?1 and pindex=?2",
                 params![parent_key, index],
                 |row| Ok(row.get::<usize, usize>(0)?),
             )
@@ -136,7 +136,7 @@ impl OperationalData {
         let timestamp = get_now_timestamp();
         match self.get_conn().execute(
             "insert into uploadPart \
-            (parentKey, index, partHash, timestamp) \
+            (parentKey, pindex, partHash, timestamp) \
             values (?1, ?2, ?3, ?4)",
             params![parent_key, index, part_hash, get_now_timestamp()],
         ) {
@@ -163,7 +163,7 @@ impl OperationalData {
         let mut query = self
             .get_conn()
             .prepare(
-                "select parentKey, index, partHash, timestamp \
+                "select parentKey, pindex, partHash, timestamp \
             from uploadPart where parentKey=?1",
             )
             .inspect_err(|e| println!("error preparing get_parts query: {e}"))
