@@ -145,8 +145,8 @@ impl<'r> DeclareUploadHeaders {
             file_name: get_header_value(headers, "file")?,
             album: get_header_value(headers, "album")?,
             artist: get_header_value(headers, "artist")?,
-            declared_size_bytes: get_header_value(headers, "declared_size")?,
-            part_size_bytes: get_header_value(headers, "part_size")?,
+            declared_size_bytes: get_header_value(headers, "declaredsize")?,
+            part_size_bytes: get_header_value(headers, "partsize")?,
         })
     }
 }
