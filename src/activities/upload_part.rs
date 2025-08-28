@@ -56,8 +56,7 @@ async fn upload_part_inner(
             "invalid part index".to_string(),
         ));
     }
-    // is the index novel?
-    if !operational_data.is_part_new(&headers.key, headers.index as u32) {
+    if operational_data.is_part_present(&headers.key, headers.index as u32) {
         return Err(MusicUploaderError::ConstraintViolation(
             "part has already been uploaded".to_string(),
         ));

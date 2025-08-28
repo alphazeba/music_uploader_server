@@ -112,7 +112,7 @@ impl OperationalData {
             .ok()
     }
 
-    pub fn is_part_new(&self, parent_key: &str, index: u32) -> bool {
+    pub fn is_part_present(&self, parent_key: &str, index: u32) -> bool {
         match self
             .get_conn()
             .query_row(
