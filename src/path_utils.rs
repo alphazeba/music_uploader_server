@@ -147,11 +147,12 @@ pub async fn build_and_validate_path(
     filename: &String,
 ) -> Result<PathBuf, ValidateDirectoryError> {
     validate_file_type(&server_config.valid_extensions, filename)?;
+    // ultimate path is like
+    // {base_path}/{artist}/{album}/{filename}.{extension}
     let base_path = Path::new(&server_config.upload_dir);
     let artist_path = validate_or_create_directory(base_path, artist).await?;
     let album_path = validate_or_create_directory(&artist_path, album).await?;
-    let song_path = validate_file_does_not_exist(&album_path, filename).await?;
-    Ok(song_path)
+    validate_file_does_not_exist(&album_path, filename).await
 }
 
 #[cfg(test)]

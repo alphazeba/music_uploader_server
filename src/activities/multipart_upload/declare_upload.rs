@@ -6,10 +6,10 @@ use rocket::{
 };
 
 use crate::{
-    activities::finalize_part_upload::finalize_part_upload,
+    activities::multipart_upload::finalize_part_upload::{cleanup_upload, finalize_part_upload},
     authenticated::Authenticated,
     config::server_config::ServerConfig,
-    data::{metrics::Metrics, operational_data::OperationalData},
+    data::{metrics::Metrics, operational_data::{OperationalData, UploadDeclarationItem}},
     model::{DeclareUploadResponse, HeaderError, MusicUploaderError},
     path_utils::{build_and_validate_path, ValidateDirectoryError},
     rocket_utils::get_header_value,
@@ -51,20 +51,18 @@ async fn declare_upload_inner(
         e => MusicUploaderError::ValidateDirectoryError(Box::new(e)),
     })?;
     validate_inputs(&headers, server_config)?;
-    let dir_str = dir.to_str().unwrap_or("<no dir?>").to_string();
+    let dir_str = dir.to_str()
+        .ok_or(MusicUploaderError::InternalServerError(format!("Failed to convert dir to dir_str: {dir:?}")))?
+        .to_string();
     let username = auth.username;
     println!("new multi part upload from {username} using directory: {dir_str}");
     let operational_data = OperationalData::new(&server_config.server_operational_db_dir);
-    let upload_declaration = operational_data
-        .declare_or_get_previous_upload(
-            headers.hash,
-            headers.declared_size_bytes,
-            headers.part_size_bytes,
-            dir_str,
-        )
-        .ok_or(MusicUploaderError::InternalServerError(
-            "Failed to declare upload in db".to_string(),
-        ))?;
+    let upload_declaration = prepare_upload_state(
+        &headers,
+        &operational_data,
+        &dir_str,
+        server_config,
+    )?;
     let expected_num_parts = upload_declaration.get_expected_num_parts();
     let received_parts =
         get_received_parts(&operational_data, &upload_declaration.key).map_err(|e| {
@@ -101,6 +99,45 @@ fn validate_inputs(
         ));
     }
     Ok(())
+}
+
+/// If there is an ongoing upload, then we get the state.  However, if the incoming state varies in ways that matter
+/// (like the part_size is smaller) then we should delete the current upload state and start anew.
+fn prepare_upload_state(
+    incoming_upload_state: &DeclareUploadHeaders,
+    operational_data: &OperationalData,
+    dir_str: &String,
+    server_config: &State<ServerConfig>,
+) -> Result<UploadDeclarationItem, MusicUploaderError> {
+    let try_twice: usize = 2;
+    for _attempt in 0..try_twice {
+        let upload_declaration = operational_data
+            .declare_or_get_previous_upload(
+                incoming_upload_state.hash.clone(),
+                incoming_upload_state.declared_size_bytes,
+                incoming_upload_state.part_size_bytes,
+                dir_str.to_string(),
+            )
+            .ok_or(MusicUploaderError::InternalServerError(
+                "Failed to declare upload in db".to_string(),
+            ))?;
+        if is_upload_declaration_good_to_use(incoming_upload_state, &upload_declaration) {
+            return Ok(upload_declaration)
+        } else {
+            cleanup_upload(&upload_declaration.key, operational_data, server_config)?;
+        }
+    }
+    Err(MusicUploaderError::InternalServerError(format!("Could not figure out how to prep the upload: {incoming_upload_state:?}")))
+}
+
+fn is_upload_declaration_good_to_use(
+    incoming_upload_state: &DeclareUploadHeaders,
+    existing_upload_item: &UploadDeclarationItem,
+) -> bool {
+    if incoming_upload_state.part_size_bytes != existing_upload_item.part_size {
+        return false;
+    }
+    return true;
 }
 
 #[derive(Debug)]

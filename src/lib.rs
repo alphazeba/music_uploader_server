@@ -1,5 +1,8 @@
 use activities::{
-    declare_upload::declare_upload,
+    multipart_upload::{
+        declare_upload::declare_upload,
+        upload_part::upload_part,
+    },
     search::album_search,
     simple_routes::{check_auth, check_conn},
     trigger_scan::trigger_scan,
@@ -9,8 +12,6 @@ use authenticated::Authenticator;
 use config::server_config::ServerConfig;
 use rocket::{catch, catchers, fairing::AdHoc, routes, Build, Rocket};
 use std::env;
-
-use crate::activities::upload_part::upload_part;
 
 mod activities;
 mod authenticated;
