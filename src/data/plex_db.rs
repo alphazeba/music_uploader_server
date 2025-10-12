@@ -139,8 +139,8 @@ impl SongResult {
 
 // playlistId, ownerId, name, title
 pub struct PlaylistResult {
-    pub id: String,
-    pub owner_id: String,
+    pub id: MetadataId,
+    pub owner_id: MetadataId,
     #[allow(unused)]
     pub owner_name: String,
     pub title: String,

@@ -59,11 +59,11 @@ struct PopulatedUserPlaylist {
 }
 
 impl PopulatedUserPlaylist {
-    pub fn id(&self) -> &str {
-        &self.playlist.id
+    pub fn id(&self) -> String {
+        self.playlist.id.to_string()
     }
-    pub fn owner_id(&self) -> &str {
-        &self.playlist.owner_id
+    pub fn owner_id(&self) -> String {
+        self.playlist.owner_id.to_string()
     }
 }
 
@@ -269,7 +269,7 @@ impl Job {
             .into_iter()
             .map(|playlist| {
                 let all_user_songs = plex_db
-                    .get_playlist_songs(&playlist.id)
+                    .get_playlist_songs(&playlist.id.to_string())
                     .map_err(|e| e.to_string())?
                     .into_iter()
                     .collect::<HashSet<_>>();
@@ -289,7 +289,7 @@ impl Job {
         server_identifier: &str,
     ) -> Result<(), ()> {
         for user_playlist in user_playlists {
-            let Some(user) = user_tokens.get(user_playlist.owner_id()) else {
+            let Some(user) = user_tokens.get(&user_playlist.owner_id()) else {
                 println!("could not find user: {}", user_playlist.owner_id());
                 continue;
             };
@@ -299,7 +299,7 @@ impl Job {
             self.client
                 .add_songs_to_playlist(
                     server_identifier,
-                    user_playlist.id(),
+                    &user_playlist.id(),
                     &user.access_token,
                     &songs_to_add,
                 )
@@ -307,7 +307,7 @@ impl Job {
                 .map_err(|e| println!("could not add songs to user: {e}"))?;
             self.client
                 .remove_songs_from_playlist(
-                    user_playlist.id(),
+                    &user_playlist.id(),
                     &user.access_token,
                     &songs_to_remove,
                 )
