@@ -12,6 +12,7 @@ pub struct PlexClient {
 }
 
 const PLEX_TV_API: &str = "https://plex.tv/api/";
+const MAX_ADD_SONG_BATCH_SIZE: usize = 20;
 
 #[derive(Error, Debug)]
 pub enum PlexClientError {
@@ -104,12 +105,35 @@ impl PlexClient {
         owner_token: &String,
         song_ids: &[String],
     ) -> PlexClientResult<()> {
-        // TODO need to set a maximum number of songs that can be added in a single call.
+        let mut starting_index = 0_usize;
+        let num_song_ids = song_ids.len();
+        while starting_index < num_song_ids {
+            let end_index = usize::min(num_song_ids, starting_index + MAX_ADD_SONG_BATCH_SIZE);
+            let song_ids_slice = &song_ids[starting_index..end_index];
+            starting_index = end_index;
+            self.add_songs_to_playlist_inner(
+                server_identifier,
+                playlist_id,
+                owner_token,
+                song_ids_slice,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    async fn add_songs_to_playlist_inner(
+        &self,
+        server_identifier: &str,
+        playlist_id: &str,
+        owner_token: &String,
+        unchecked_song_ids: &[String],
+    ) -> PlexClientResult<()> {
         let url = self.build_local_url(&format!("playlists/{playlist_id}/items"))?;
-        let uri = build_song_uri(server_identifier, song_ids);
+        let uri = build_song_uri(server_identifier, unchecked_song_ids);
         println!("adding song uri: {uri} to playlist id: {playlist_id}");
         println!("using url: {url}");
-        // maybe docs lied and you can't call query twice.
+        // Todo: it is possible that docs didn't lie and we can call query twice.
         let request = self
             .http_client
             .put(url)
