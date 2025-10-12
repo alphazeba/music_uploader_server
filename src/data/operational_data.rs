@@ -40,7 +40,7 @@ impl OperationalData {
             .execute(
                 "create table if not exists lastKnownPlaylist \
                 (title TEXT not null PRIMARY KEY, \
-                subscriberIds TEXT not null \
+                subscriberIds TEXT not null, \
                 timestamp DATE not null)",
                 [],
             )
