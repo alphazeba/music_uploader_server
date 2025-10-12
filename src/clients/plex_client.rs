@@ -107,6 +107,7 @@ impl PlexClient {
         // TODO need to set a maximum number of songs that can be added in a single call.
         let url = self.build_local_url(&format!("playlists/{playlist_id}/items"))?;
         let uri = build_song_uri(server_identifier, song_ids);
+        println!("adding song uri: {uri} to playlist id: {playlist_id}");
         // maybe docs lied and you can't call query twice.
         let request = self
             .http_client

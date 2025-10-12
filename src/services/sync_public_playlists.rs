@@ -94,6 +94,8 @@ impl Job {
         let plex_db = PlexDb::new(&self.plex_db_path);
         let operational_db = OperationalData::new(&self.operational_db_path);
         let public_user_playlists = Self::get_public_user_playlists(&plex_db)?;
+        let num_public_playlists = public_user_playlists.len();
+        println!("found {num_public_playlists} public playlists");
         let last_known_playlist_states = Self::get_last_known_playlist_states(&operational_db)?;
         // at the end we can delete last known playlist state for playlists still in this list.
         let mut unused_last_known_playlist_titles = last_known_playlist_states
@@ -102,6 +104,7 @@ impl Job {
             .collect::<HashSet<_>>();
 
         for (title, user_playlists) in public_user_playlists {
+            println!("working on public playlist: {title}");
             unused_last_known_playlist_titles.remove(&title);
             let mut populated_user_playlist =
                 self.populate_songs_for_user_playlists(&plex_db, user_playlists)?;
@@ -134,14 +137,6 @@ impl Job {
             )
             .await
             .map_err(|_e| "could not sync users and playlist")?;
-
-            let new_subscriber_ids = populated_user_playlist
-                .iter()
-                .map(|item| item.owner_id().to_string())
-                .collect::<Vec<_>>();
-            let _changes = operational_db
-                .update_last_known_playlist_subscribers(&title, &new_subscriber_ids)
-                .ok_or("could not update playlist subscribers")?;
         }
 
         for unused_playlist in unused_last_known_playlist_titles {
@@ -221,6 +216,10 @@ impl Job {
         // for each user (that is in subscriber list)
         let mut canonical_song_list = last_known_playlist_state.song_ids.clone();
         let mut playlists_to_nuke = Vec::new();
+        let subscriber_ids = user_playlists
+            .iter()
+            .map(|item| item.owner_id().to_string())
+            .collect::<Vec<_>>();
         for user_playlist in user_playlists {
             let user_id = user_playlist.owner_id().to_string();
             let user_token = user_tokens
@@ -257,6 +256,7 @@ impl Job {
                 }
             }
         }
+        let _changes = operational_db.update_last_known_playlist_subscribers(title, &subscriber_ids);
         Ok((canonical_song_list, playlists_to_nuke))
     }
 
@@ -296,23 +296,31 @@ impl Job {
             let song_delta = get_song_delta(&song_list, &user_playlist.songs);
             let songs_to_add = song_delta.missing_songs.into_iter().collect::<Vec<_>>();
             let songs_to_remove = song_delta.additional_songs.into_iter().collect::<Vec<_>>();
-            self.client
-                .add_songs_to_playlist(
-                    server_identifier,
-                    &user_playlist.id(),
-                    &user.access_token,
-                    &songs_to_add,
-                )
-                .await
-                .map_err(|e| println!("could not add songs to user: {e}"))?;
-            self.client
-                .remove_songs_from_playlist(
-                    &user_playlist.id(),
-                    &user.access_token,
-                    &songs_to_remove,
-                )
-                .await
-                .map_err(|e| println!("could not remove songs from user: {e}"))?
+            let username = &user.username;
+            let num_to_add = songs_to_add.len();
+            let num_to_remove = songs_to_remove.len();
+            println!("user {username} has {num_to_add} to add & {num_to_remove} to remove");
+            if num_to_add > 0 {
+                self.client
+                    .add_songs_to_playlist(
+                        server_identifier,
+                        &user_playlist.id(),
+                        &user.access_token,
+                        &songs_to_add,
+                    )
+                    .await
+                    .map_err(|e| println!("could not add songs to user: {e}"))?;
+            }
+            if num_to_remove > 0 {
+                self.client
+                    .remove_songs_from_playlist(
+                        &user_playlist.id(),
+                        &user.access_token,
+                        &songs_to_remove,
+                    )
+                    .await
+                    .map_err(|e| println!("could not remove songs from user: {e}"))?
+            }
         }
         Ok(())
     }
