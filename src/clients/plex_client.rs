@@ -177,7 +177,10 @@ mod tests {
     async fn test_add_song_does_not_get_builder_error() {
         let client = PlexClient::new("http://urmum", "urmum".to_string());
         let song_ids = vec!["123".to_string(), "432".to_string()];
-        let Err(e) = client.add_songs_to_playlist("urmum", "123", &"urmum".to_string(), &song_ids).await else {
+        let Err(e) = client
+            .add_songs_to_playlist("urmum", "123", &"urmum".to_string(), &song_ids)
+            .await
+        else {
             panic!("should have failed");
         };
         match e {
@@ -193,7 +196,10 @@ mod tests {
     async fn test_add_song_does_not_get_builder_error_2() {
         let client = PlexClient::new("http://urmum", "urmum".to_string());
         let song_ids = vec!["123".to_string()];
-        let Err(e) = client.add_songs_to_playlist("urmum", "123", &"urmum".to_string(), &song_ids).await else {
+        let Err(e) = client
+            .add_songs_to_playlist("urmum", "123", &"urmum".to_string(), &song_ids)
+            .await
+        else {
             panic!("should have failed");
         };
         match e {

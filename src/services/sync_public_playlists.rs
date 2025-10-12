@@ -181,12 +181,10 @@ impl Job {
         user_playlists: &[PopulatedUserPlaylist],
     ) -> Result<(HashSet<String>, Vec<PlaylistToNuke>), String> {
         let init = HashSet::new();
-        let all_songs = user_playlists
-            .iter()
-            .fold(init, |mut sink, playlist| {
-                sink.extend(playlist.songs.keys().map(String::to_string));
-                sink
-            });
+        let all_songs = user_playlists.iter().fold(init, |mut sink, playlist| {
+            sink.extend(playlist.songs.keys().map(String::to_string));
+            sink
+        });
         // create a new known state.
         let user_ids = user_playlists
             .iter()
@@ -227,7 +225,11 @@ impl Job {
             match is_old_subscriber {
                 true => {
                     // this is an old subscriber.
-                    let user_song_id_set = user_playlist.songs.keys().map(String::to_string).collect::<HashSet<_>>();
+                    let user_song_id_set = user_playlist
+                        .songs
+                        .keys()
+                        .map(String::to_string)
+                        .collect::<HashSet<_>>();
                     let song_delta =
                         get_song_delta(&last_known_playlist_state.song_ids, &user_song_id_set);
                     // missing songs should be removed from canonical list.
@@ -254,7 +256,8 @@ impl Job {
                 }
             }
         }
-        let _changes = operational_db.update_last_known_playlist_subscribers(title, &subscriber_ids);
+        let _changes =
+            operational_db.update_last_known_playlist_subscribers(title, &subscriber_ids);
         Ok((canonical_song_list, playlists_to_nuke))
     }
 
@@ -271,7 +274,7 @@ impl Job {
                     .map_err(|e| e.to_string())?
                     .into_iter()
                     .map(|item| (item.song_id.to_string(), item.playlist_id.to_string()))
-                    .collect::<HashMap<_,_>>();
+                    .collect::<HashMap<_, _>>();
                 Ok(PopulatedUserPlaylist {
                     songs: all_user_songs,
                     playlist,
@@ -292,7 +295,11 @@ impl Job {
                 println!("could not find user: {}", user_playlist.owner_id());
                 continue;
             };
-            let user_song_id_set = user_playlist.songs.keys().map(String::to_string).collect::<HashSet<_>>();
+            let user_song_id_set = user_playlist
+                .songs
+                .keys()
+                .map(String::to_string)
+                .collect::<HashSet<_>>();
             let song_delta = get_song_delta(&song_list, &user_song_id_set);
             let username = &user.username;
             let num_to_add = song_delta.missing_songs.len();
@@ -311,7 +318,10 @@ impl Job {
                     .map_err(|e| println!("could not add songs to user: {e}"))?;
             }
             if num_to_remove > 0 {
-                let playlist_ids_to_remove = song_delta.additional_songs.into_iter().filter_map(|song_id| {
+                let playlist_ids_to_remove = song_delta
+                    .additional_songs
+                    .into_iter()
+                    .filter_map(|song_id| {
                         let playlist_id = user_playlist.songs.get(&song_id);
                         if playlist_id.is_none() {
                             println!("issue: could not find playlist id for {song_id}");
