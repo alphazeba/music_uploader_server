@@ -1,10 +1,8 @@
 use crate::{
-    authenticated::Authenticated, config::server_config::ServerConfig, data::metrics::Metrics,
-    model::MusicUploaderError,
+    authenticated::Authenticated, clients::plex_client::PlexClient,
+    config::server_config::ServerConfig, data::metrics::Metrics, model::MusicUploaderError,
 };
-use reqwest::Client;
 use rocket::{post, State};
-use std::path::Path;
 
 #[post("/triggerscan")]
 pub async fn trigger_scan(
@@ -12,46 +10,26 @@ pub async fn trigger_scan(
     server_config: &State<ServerConfig>,
 ) -> Result<String, MusicUploaderError> {
     println!("{} is triggering a scan", auth.username);
-    let client = Client::new();
-    let path: String = Path::new(&server_config.plex_url)
-        .join(format!(
-            "library/sections/{}/refresh",
-            server_config.plex_music_library_id.to_string()
-        ))
-        .to_str()
-        .map(str::to_string)
-        .ok_or_else(|| {
-            let message =
-                "Failed to build url trigger scanning.  This likely means Rocket.toml is bad.";
-            println!("{}", message);
-            MusicUploaderError::InternalServerError(message.to_string())
-        })?;
-    metric(&server_config.server_db_dir, &auth.username);
-    match client
-        .get(path)
-        .query(&[("X-Plex-Token", &server_config.plex_server_token)])
-        .send()
+    let plex_client = PlexClient::new(
+        &server_config.plex_url,
+        server_config.plex_server_token.clone(),
+    );
+    let result = plex_client
+        .trigger_scan(server_config.plex_music_library_id)
         .await
-    {
-        Ok(response) => {
-            if !response.status().is_success() {
-                println!("plex error: {}", response.status().as_u16());
-                return Err(MusicUploaderError::PlexComplaint(
-                    response.status().as_u16(),
-                ));
-            } else {
-                println!("plex successfully scanned :)");
-                return Ok("successful scan".to_string());
-            }
-        }
-        Err(e) => {
+        .map(|_| {
+            println!("plex successfully scanned :)");
+            "successful scan".to_string()
+        })
+        .map_err(|e| {
             println!(
                 "there was an error reaching out to plex to trigger scan: {}",
                 e.to_string()
             );
-            Err(MusicUploaderError::InternalServerError(e.to_string()))
-        }
-    }
+            MusicUploaderError::InternalServerError(e.to_string())
+        });
+    metric(&server_config.server_db_dir, &auth.username);
+    result
 }
 
 fn metric(db_path: &String, user: &String) {

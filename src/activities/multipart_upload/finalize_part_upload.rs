@@ -34,11 +34,7 @@ pub async fn finalize_part_upload(
     check_hash(&upload_declaration.hash, &bytes)?;
     // now we have verified everything. write to disk.
     write_bytes_to_new_file(upload_declaration.path.into(), &bytes)?;
-    cleanup_upload(
-        &upload_declaration.key,
-        &operational_data,
-        server_config
-    )?;
+    cleanup_upload(&upload_declaration.key, &operational_data, server_config)?;
     Ok(())
 }
 
@@ -63,10 +59,10 @@ fn get_parts(
     key: &String,
     operational_data: &OperationalData,
 ) -> Result<Vec<UploadPartItem>, MusicUploaderError> {
-    operational_data.get_parts(key).ok_or(
-        MusicUploaderError::InternalServerError(format!(
+    operational_data
+        .get_parts(key)
+        .ok_or(MusicUploaderError::InternalServerError(format!(
             "failed to get the parts for upload: {}",
             key
-        )),
-    )
+        )))
 }

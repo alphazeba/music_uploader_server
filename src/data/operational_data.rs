@@ -1,4 +1,6 @@
-use rusqlite::{params, Connection};
+use std::collections::HashSet;
+
+use rusqlite::{params, Connection, Params, Row};
 
 use crate::time_utils::get_now_timestamp;
 
@@ -34,6 +36,25 @@ impl OperationalData {
                 [],
             )
             .expect("could not create table :(");
+        me.get_conn()
+            .execute(
+                "create table if not exists lastKnownPlaylist \
+                (title TEXT not null PRIMARY KEY, \
+                subscriberIds TEXT not null \
+                timestamp DATE not null)",
+                [],
+            )
+            .expect("could not create lastKnownState table");
+        me.get_conn()
+            .execute(
+                "create table if not exists lastKnownSong \
+                (plTitle TEXT not null, \
+                songId TEXT not null, \
+                timestamp DATE not null, \
+                PRIMARY KEY (plTitle, songId))",
+                [],
+            )
+            .expect("could not create lastKnownSong");
         me
     }
 
@@ -160,31 +181,20 @@ impl OperationalData {
     }
 
     pub fn get_parts(&self, key: &str) -> Option<Vec<UploadPartItem>> {
-        let mut query = self
-            .get_conn()
-            .prepare(
-                "select parentKey, pindex, partHash, timestamp \
-            from uploadPart where parentKey=?1",
-            )
-            .inspect_err(|e| println!("error preparing get_parts query: {e}"))
-            .ok()?;
-        let result = query
-            .query_map(params![key], |row| {
+        self.query_and_map(
+            "get_parts",
+            "select parentKey, pindex, partHash, timestamp \
+                from uploadPart where parentKey=?1",
+            params![key],
+            |row| {
                 Ok(UploadPartItem {
                     parent_key: row.get(0)?,
                     index: row.get(1)?,
                     part_hash: row.get(2)?,
                     timestamp: row.get(3)?,
                 })
-            })
-            .inspect_err(|e| println!("Error making get parts query on {key}: {e}"))
-            .ok()?
-            .map(|item| {
-                item.inspect_err(|e| println!("error processing get_parts query result: {e}"))
-                    .ok()
-            })
-            .collect::<Option<Vec<_>>>();
-        result
+            },
+        )
     }
 
     pub fn cleanup_upload(&self, key: &str) -> usize {
@@ -214,6 +224,199 @@ impl OperationalData {
             }
         }
     }
+
+    pub fn get_last_known_playlist_state(&self) -> Option<Vec<LastKnownPlaylistState>> {
+        let results = self.query_and_map(
+            "lastKnownPlaylist",
+            "select title, subscriberIds from lastKnownPlaylist",
+            [],
+            |row| {
+                Ok(TitleSubscriber {
+                    title: row.get(0)?,
+                    unparsed_subscriber_ids: row.get(1)?,
+                })
+            },
+        )?;
+        let playlists = results
+            .into_iter()
+            .map(|item| {
+                let song_ids = self
+                    .get_playlist_songs(&item.title)?
+                    .into_iter()
+                    .collect::<HashSet<_>>();
+                let subscriber_ids = Self::parse_subscriber_ids(item.unparsed_subscriber_ids);
+                Some(LastKnownPlaylistState {
+                    title: item.title,
+                    subscriber_ids,
+                    song_ids,
+                })
+            })
+            .collect::<Option<Vec<_>>>();
+        playlists
+    }
+
+    fn parse_subscriber_ids(subscriber_ids: String) -> Vec<String> {
+        subscriber_ids.split(",").map(str::to_string).collect()
+    }
+
+    fn build_subscriber_ids(subscriber_ids: &[String]) -> String {
+        subscriber_ids.join(",")
+    }
+
+    fn get_playlist_songs(&self, title: &str) -> Option<Vec<String>> {
+        self.query_and_map(
+            "get_playlist_songs",
+            "select plTitle, songId from lastKnownSong where plTitle=?1",
+            params![title],
+            |row| {
+                let song_id: String = row.get(1)?;
+                Ok(song_id)
+            },
+        )
+    }
+
+    pub fn delete_last_known_playlist(&self, title: &str) -> Option<usize> {
+        let conn = self.get_conn();
+        let song_updates = conn
+            .execute("delete from lastKnownSong where plTitle=?1", params![title])
+            .inspect_err(|e| println!("failed to delete songs from deleted playlsit {title}: {e}"))
+            .ok()?;
+        let playlist_updates = conn
+            .execute(
+                "delete from lastKnownPlaylist where title=?1",
+                params![title],
+            )
+            .inspect_err(|e| println!("faield to delete playlist {title}: {e}"))
+            .ok()?;
+        Some(song_updates + playlist_updates)
+    }
+
+    pub fn create_last_known_playlist(
+        &self,
+        title: &str,
+        initial_subscriber_ids: &[String],
+    ) -> Option<usize> {
+        let formatted_subscriber_ids = Self::build_subscriber_ids(initial_subscriber_ids);
+        self.get_conn()
+            .execute(
+                "insert into lastKnownPlaylist \
+                (title, subscriberIds, timestamp) \
+                values (?1, ?2, ?3)",
+                params![title, formatted_subscriber_ids, get_now_timestamp()],
+            )
+            .inspect_err(|e| println!("failed to execute create_last_known_playlist: {e}"))
+            .ok()
+    }
+
+    pub fn add_last_known_playlist_songs<'a, T>(&self, title: &str, song_ids: T) -> Option<usize>
+    where
+        T: Iterator<Item = &'a String>,
+    {
+        let sql = "insert into lastKnownSong \
+            (plTitle, songId, timestamp) \
+            values (?1, ?2, ?3)";
+        let mut statement = self
+            .get_conn()
+            .prepare(sql)
+            .inspect_err(|e| println!("Faield to preapre add_last_known_playlist_songs: {e}"))
+            .ok()?;
+        let changes = song_ids
+            .filter_map(|song_id| {
+                let params = params![title, song_id, get_now_timestamp()];
+                statement
+                    .execute(params)
+                    .inspect_err(|e| {
+                        println!(
+                            "failed executing add_last_known_playlist_songs for {song_id}: {e}"
+                        )
+                    })
+                    .ok()
+            })
+            .sum::<usize>();
+        Some(changes)
+    }
+
+    pub fn remove_last_known_playlist_songs(
+        &self,
+        title: &str,
+        song_ids: &[String],
+    ) -> Option<usize> {
+        let sql = "delete from lastKnownSong where plTitle=?1 and songId=?2";
+        let mut statement = self
+            .get_conn()
+            .prepare(sql)
+            .inspect_err(|e| println!("Faield to preapre remove_last_known_playlist_songs: {e}"))
+            .ok()?;
+        let changes = song_ids
+            .iter()
+            .filter_map(|song_id| {
+                let params = params![title, song_id];
+                statement
+                    .execute(params)
+                    .inspect_err(|e| {
+                        println!(
+                            "failed executing remove_last_known_playlist_songs for {song_id}: {e}"
+                        )
+                    })
+                    .ok()
+            })
+            .sum::<usize>();
+        Some(changes)
+    }
+
+    pub fn update_last_known_playlist_subscribers(
+        &self,
+        title: &str,
+        subscriber_ids: &[String],
+    ) -> Option<usize> {
+        let formatted_subscriber_ids = Self::build_subscriber_ids(subscriber_ids);
+        let sql = "update lastKnownPlaylist \
+            SET subscriberIds=?1 \
+            WHERE title=?2";
+        self.get_conn()
+            .execute(sql, params![formatted_subscriber_ids, title])
+            .inspect_err(|e| {
+                println!("failed to execute update_last_known_playlist_subscribers: {e}")
+            })
+            .ok()
+    }
+
+    fn query_and_map<T, P, F>(
+        &self,
+        title: &str,
+        sql: &str,
+        params: P,
+        row_map_fn: F,
+    ) -> Option<Vec<T>>
+    where
+        P: Params,
+        F: FnMut(&Row<'_>) -> rusqlite::Result<T>,
+    {
+        let mut query = self
+            .get_conn()
+            .prepare(sql)
+            .inspect_err(|e| println!("error preparing query for {title}: {e}"))
+            .ok()?;
+        let results = query
+            .query_map(params, row_map_fn)
+            .inspect_err(|e| println!("error getting results for {title}: {e}"))
+            .ok()?
+            .collect::<Result<Vec<_>, _>>()
+            .inspect_err(|e| println!("error mapping results for {title}: {e}"))
+            .ok();
+        results
+    }
+}
+
+struct TitleSubscriber {
+    title: String,
+    unparsed_subscriber_ids: String,
+}
+
+pub struct LastKnownPlaylistState {
+    pub title: String,
+    pub subscriber_ids: Vec<String>,
+    pub song_ids: HashSet<String>,
 }
 
 #[allow(unused)]

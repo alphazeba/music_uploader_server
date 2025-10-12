@@ -21,6 +21,8 @@ select title, id from metadata_items where metadata_type = 9;
 select title, id, metadata_type from metadata_items where parent_id = 1768;
 
 
+# get playlist names 
+select id, metadata_type, title, summary from metadata_items where metadata_type = 15;
 
 
 # join the data together
@@ -52,7 +54,7 @@ select *
   on play_queue_generators.metadata_item_id = media_items.metadata_item_id 
   left outer join metadata_items on # contains the playlist information
   metadata_items.id = play_queue_generators.playlist_id
-  where metadata_items.title = 'Recently Played';
+  where metadata_items.title = 'Lonj';
 
 select file 
   from media_parts
@@ -62,7 +64,7 @@ select file
   on play_queue_generators.metadata_item_id = media_items.metadata_item_id 
   left outer join metadata_items on
   metadata_items.id = play_queue_generators.playlist_id
-  where metadata_items.title = 'KARAOKE';
+  where metadata_items.title = 'My Stuff';
 
 # try hunting things\
 PRAGMA table_info(media_parts);
@@ -71,5 +73,31 @@ select * from media_parts left outer join media_items on
   media_items.id = media_parts.media_item_id
 
 PRAGMA table_info(play_queue_generators);
+
+
+
+
+# get play list id
+select id as playlistId, title, * from metadata_items where metadata_type = 15;
+
+# get the items in the playlist. does not have things like playlist title though.
+  select * from play_queue_generators where playlist_id = 345
+
+select playlistId, ownerId, name, title from (
+  select id as playlistId, title, json_extract(extra_data, "$.pv:owner") as ownerId 
+  from metadata_items
+  where metadata_type = 15 and title like "All%"
+) join accounts on ownerId = id
+
+
+public playlist
+- [[users]]
+ - userId
+ - playlistId
+- name
+- description
+- lastUpdated
+- [[playlistSongs]]
+ - songId
 
 

@@ -1,8 +1,5 @@
 use activities::{
-    multipart_upload::{
-        declare_upload::declare_upload,
-        upload_part::upload_part,
-    },
+    multipart_upload::{declare_upload::declare_upload, upload_part::upload_part},
     search::album_search,
     simple_routes::{check_auth, check_conn},
     trigger_scan::trigger_scan,
@@ -13,14 +10,18 @@ use config::server_config::ServerConfig;
 use rocket::{catch, catchers, fairing::AdHoc, routes, Build, Rocket};
 use std::env;
 
+use crate::services::sync_public_playlists::start_sync_public_playlists;
+
 mod activities;
 mod authenticated;
+pub mod clients;
 mod config;
 mod data;
 mod data_validation;
 pub mod model;
 mod path_utils;
 mod rocket_utils;
+mod services;
 mod time_utils;
 
 #[catch(401)]
@@ -33,6 +34,7 @@ pub fn build_rocket() -> Rocket<Build> {
         "starting musicuploader server, version: {}",
         env!("CARGO_PKG_VERSION")
     );
+    start_sync_public_playlists();
     config_env_or_panic();
     let authenticator = Authenticator::new()
         .expect("cannot run server without authenticator must look into issues");
