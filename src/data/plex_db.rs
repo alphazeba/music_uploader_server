@@ -104,8 +104,8 @@ impl PlexDb {
             "select metadata_item_id from play_queue_generators where playlist_id=?1",
             params![playlist_id],
             |row| {
-                let song_id: String = row.get(0)?;
-                Ok(song_id)
+                let song_id: MetadataId = row.get(0)?;
+                Ok(song_id.to_string())
             },
         );
         songs
