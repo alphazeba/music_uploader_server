@@ -21,8 +21,15 @@ pub fn start_sync_public_playlists() {
     tokio::spawn(sync_public_playlists());
 }
 
+#[derive(serde::Deserialize)]
+#[serde(crate = "rocket::serde")]
+struct DefaultServerConfig {
+    default: ServerConfig,
+}
+
 async fn sync_public_playlists() {
-    let server_config = load_toml::<ServerConfig>("./Rocket.toml");
+    let default_server_config = load_toml::<DefaultServerConfig>("./Rocket.toml");
+    let server_config = default_server_config.default;
     let state = Arc::new(State {
         plex_base: "test".to_string(),
         plex_token: server_config.plex_server_token,

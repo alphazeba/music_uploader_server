@@ -4,6 +4,7 @@ use music_uploader_server::services::sync_public_playlists::start_sync_public_pl
 
 #[launch]
 async fn rocket() -> _ {
+    let rocket = music_uploader_server::build_rocket();
     start_sync_public_playlists();
-    music_uploader_server::build_rocket()
+    rocket
 }
