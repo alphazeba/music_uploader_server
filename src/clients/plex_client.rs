@@ -101,15 +101,27 @@ impl PlexClient {
         &self,
         server_identifier: &str,
         playlist_id: &str,
-        owner_token: &str,
+        owner_token: &String,
         song_ids: &[String],
     ) -> PlexClientResult<()> {
         // TODO need to set a maximum number of songs that can be added in a single call.
         let url = self.build_local_url(&format!("playlists/{playlist_id}/items"))?;
         let uri = build_song_uri(server_identifier, song_ids);
-        let request = self.http_client.put(url).query(&[("uri", &uri)]);
-        let _result = Self::send_with_token(request, owner_token).await?;
-        Ok(())
+        // maybe docs lied and you can't call query twice.
+        let request = self
+            .http_client
+            .put(url)
+            .query(&[("uri", &uri), ("X-Plex-Token", owner_token)]);
+        let result = request.send().await.map_err(|e| {
+            PlexClientError::PlexApiSendFailure(format!(
+                "Failed to send add_songs_to_playlist: {e}"
+            ))
+        })?;
+        if result.status().is_success() {
+            Ok(())
+        } else {
+            Err(PlexClientError::UnhappyPlexResponse(result))
+        }
     }
 
     pub async fn remove_songs_from_playlist(
