@@ -31,7 +31,7 @@ async fn sync_public_playlists() {
     let default_server_config = load_toml::<DefaultServerConfig>("./Rocket.toml");
     let server_config = default_server_config.default;
     let state = Arc::new(State {
-        plex_base: "test".to_string(),
+        plex_base: server_config.plex_url,
         plex_token: server_config.plex_server_token,
         plex_db_path: server_config.plex_db_dir,
         operational_db_path: server_config.server_operational_db_dir,
