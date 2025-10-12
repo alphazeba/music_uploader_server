@@ -97,19 +97,26 @@ impl PlexDb {
         result
     }
 
-    pub fn get_playlist_songs(&self, playlist_id: &str) -> Result<Vec<String>, DbErr> {
+    pub fn get_playlist_songs(&self, playlist_id: &str) -> Result<Vec<PlaylistSong>, DbErr> {
         let songs = query_and_map(
             self.get_conn(),
             "get playlist songs",
-            "select metadata_item_id from play_queue_generators where playlist_id=?1",
+            "select metadata_item_id, id from play_queue_generators where playlist_id=?1",
             params![playlist_id],
             |row| {
-                let song_id: MetadataId = row.get(0)?;
-                Ok(song_id.to_string())
+                Ok(PlaylistSong {
+                    song_id: row.get(0)?,
+                    playlist_id: row.get(1)?,
+                })
             },
         );
         songs
     }
+}
+
+pub struct PlaylistSong {
+    pub song_id: MetadataId,
+    pub playlist_id: MetadataId,
 }
 
 pub type MetadataId = i32;

@@ -126,15 +126,19 @@ impl PlexClient {
         }
     }
 
+    /// DOES NOT USE song_id/metadata_id/rating_key!
+    /// instead uses playlist_ids which sources from play_queue_generators.id
     pub async fn remove_songs_from_playlist(
         &self,
         playlist_id: &str,
         owner_token: &str,
-        song_ids: &[String],
+        playlist_ids: &[String], // this is wrong
     ) -> PlexClientResult<()> {
+        // TODO. when deleting items from a playlist, you do not use the rating key
+        // you instead use the "playlistId" which is the first column in play_queue_generators.
         let url = self.build_local_url(&format!("playlists/{playlist_id}/items"))?;
-        for song_id in song_ids {
-            let item_url = format!("{url}/{song_id}");
+        for playlist_id in playlist_ids {
+            let item_url = format!("{url}/{playlist_id}");
             let request = self.http_client.delete(item_url);
             let _result = Self::send_with_token(request, owner_token).await?;
         }

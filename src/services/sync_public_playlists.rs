@@ -55,7 +55,7 @@ struct State {
 
 struct PopulatedUserPlaylist {
     playlist: PlaylistResult,
-    songs: HashSet<String>,
+    songs: HashMap<String, String>,
 }
 
 impl PopulatedUserPlaylist {
@@ -184,12 +184,9 @@ impl Job {
         let all_songs = user_playlists
             .iter()
             .fold(init, |mut sink, playlist| {
-                sink.extend(playlist.songs.iter());
+                sink.extend(playlist.songs.keys().map(String::to_string));
                 sink
-            })
-            .into_iter()
-            .map(String::to_string)
-            .collect::<HashSet<_>>();
+            });
         // create a new known state.
         let user_ids = user_playlists
             .iter()
@@ -230,8 +227,9 @@ impl Job {
             match is_old_subscriber {
                 true => {
                     // this is an old subscriber.
+                    let user_song_id_set = user_playlist.songs.keys().map(String::to_string).collect::<HashSet<_>>();
                     let song_delta =
-                        get_song_delta(&last_known_playlist_state.song_ids, &user_playlist.songs);
+                        get_song_delta(&last_known_playlist_state.song_ids, &user_song_id_set);
                     // missing songs should be removed from canonical list.
                     for missing_song in &song_delta.missing_songs {
                         canonical_song_list.remove(missing_song);
@@ -272,7 +270,8 @@ impl Job {
                     .get_playlist_songs(&playlist.id.to_string())
                     .map_err(|e| e.to_string())?
                     .into_iter()
-                    .collect::<HashSet<_>>();
+                    .map(|item| (item.song_id.to_string(), item.playlist_id.to_string()))
+                    .collect::<HashMap<_,_>>();
                 Ok(PopulatedUserPlaylist {
                     songs: all_user_songs,
                     playlist,
@@ -293,14 +292,14 @@ impl Job {
                 println!("could not find user: {}", user_playlist.owner_id());
                 continue;
             };
-            let song_delta = get_song_delta(&song_list, &user_playlist.songs);
-            let songs_to_add = song_delta.missing_songs.into_iter().collect::<Vec<_>>();
-            let songs_to_remove = song_delta.additional_songs.into_iter().collect::<Vec<_>>();
+            let user_song_id_set = user_playlist.songs.keys().map(String::to_string).collect::<HashSet<_>>();
+            let song_delta = get_song_delta(&song_list, &user_song_id_set);
             let username = &user.username;
-            let num_to_add = songs_to_add.len();
-            let num_to_remove = songs_to_remove.len();
+            let num_to_add = song_delta.missing_songs.len();
+            let num_to_remove = song_delta.additional_songs.len();
             println!("user {username} has {num_to_add} to add & {num_to_remove} to remove");
             if num_to_add > 0 {
+                let songs_to_add = song_delta.missing_songs.into_iter().collect::<Vec<_>>();
                 self.client
                     .add_songs_to_playlist(
                         server_identifier,
@@ -312,11 +311,20 @@ impl Job {
                     .map_err(|e| println!("could not add songs to user: {e}"))?;
             }
             if num_to_remove > 0 {
+                let playlist_ids_to_remove = song_delta.additional_songs.into_iter().filter_map(|song_id| {
+                        let playlist_id = user_playlist.songs.get(&song_id);
+                        if playlist_id.is_none() {
+                            println!("issue: could not find playlist id for {song_id}");
+                        }
+                        playlist_id
+                    })
+                    .map(String::to_string)
+                    .collect::<Vec<_>>();
                 self.client
                     .remove_songs_from_playlist(
                         &user_playlist.id(),
                         &user.access_token,
-                        &songs_to_remove,
+                        &playlist_ids_to_remove,
                     )
                     .await
                     .map_err(|e| println!("could not remove songs from user: {e}"))?
