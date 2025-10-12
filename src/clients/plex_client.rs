@@ -108,6 +108,7 @@ impl PlexClient {
         let url = self.build_local_url(&format!("playlists/{playlist_id}/items"))?;
         let uri = build_song_uri(server_identifier, song_ids);
         println!("adding song uri: {uri} to playlist id: {playlist_id}");
+        println!("using url: {url}");
         // maybe docs lied and you can't call query twice.
         let request = self
             .http_client
@@ -115,7 +116,7 @@ impl PlexClient {
             .query(&[("uri", &uri), ("X-Plex-Token", owner_token)]);
         let result = request.send().await.map_err(|e| {
             PlexClientError::PlexApiSendFailure(format!(
-                "Failed to send add_songs_to_playlist: {e}"
+                "Failed to send add_songs_to_playlist: {e:?}"
             ))
         })?;
         if result.status().is_success() {
@@ -160,4 +161,43 @@ fn build_song_uri(server_identifier: &str, song_ids: &[String]) -> String {
 
 fn build_uri(server_identifier: &str) -> String {
     format!("server://{server_identifier}/com.plexapp.plugins.library")
+}
+
+#[cfg(test)]
+mod tests {
+    use rocket::tokio;
+
+    use crate::clients::plex_client::{PlexClient, PlexClientError};
+
+    #[tokio::test]
+    async fn test_add_song_does_not_get_builder_error() {
+        let client = PlexClient::new("http://urmum", "urmum".to_string());
+        let song_ids = vec!["123".to_string(), "432".to_string()];
+        let Err(e) = client.add_songs_to_playlist("urmum", "123", &"urmum".to_string(), &song_ids).await else {
+            panic!("should have failed");
+        };
+        match e {
+            PlexClientError::PlexApiSendFailure(message) => {
+                println!("{message}");
+                assert!(message.contains("dns error"));
+            }
+            _ => panic!("wrong error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_add_song_does_not_get_builder_error_2() {
+        let client = PlexClient::new("http://urmum", "urmum".to_string());
+        let song_ids = vec!["123".to_string()];
+        let Err(e) = client.add_songs_to_playlist("urmum", "123", &"urmum".to_string(), &song_ids).await else {
+            panic!("should have failed");
+        };
+        match e {
+            PlexClientError::PlexApiSendFailure(message) => {
+                println!("{message}");
+                assert!(message.contains("dns error"));
+            }
+            _ => panic!("wrong error"),
+        }
+    }
 }
