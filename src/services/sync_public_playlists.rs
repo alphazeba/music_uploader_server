@@ -15,7 +15,8 @@ use crate::{
     },
 };
 
-const ONE_HOUR_IN_SECONDS: u64 = 60 * 60;
+const ONE_MINUTE_IN_SECONDS: u64 = 60;
+// const ONE_HOUR_IN_SECONDS: u64 = 60 * ONE_MINUTE_IN_SECONDS;
 
 pub fn start_sync_public_playlists() {
     tokio::spawn(sync_public_playlists());
@@ -42,7 +43,7 @@ async fn sync_public_playlists() {
             Ok(()) => println!("sync public playlists success"),
             Err(e) => println!("sync public playlists ERROR: {e}"),
         }
-        tokio::time::sleep(Duration::from_secs(ONE_HOUR_IN_SECONDS)).await;
+        tokio::time::sleep(Duration::from_secs(15 * ONE_MINUTE_IN_SECONDS)).await;
     }
 }
 
