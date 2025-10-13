@@ -10,6 +10,8 @@ use config::server_config::ServerConfig;
 use rocket::{catch, catchers, fairing::AdHoc, routes, Build, Rocket};
 use std::env;
 
+use crate::activities::public_playlists::public_playlists;
+
 mod activities;
 mod authenticated;
 pub mod clients;
@@ -47,6 +49,7 @@ pub fn build_rocket() -> Rocket<Build> {
                 album_search,
                 declare_upload,
                 upload_part,
+                public_playlists,
             ],
         )
         .attach(AdHoc::config::<ServerConfig>())
