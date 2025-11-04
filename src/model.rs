@@ -51,6 +51,18 @@ pub enum DeclareUploadResponse {
     },
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct PublicPlaylistResponse {
+    pub playlists: Vec<ListedPublicPlaylist>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ListedPublicPlaylist {
+    pub title: String,
+    pub num_subscribers: u32,
+    pub num_songs: u32,
+}
+
 pub fn to_json(obj: &impl Serialize) -> Result<String, MusicUploaderError> {
     serde_json::to_string(obj).map_err(|e| MusicUploaderError::SerdeIssue(Box::new(e)))
 }
@@ -71,6 +83,16 @@ impl<'r> Responder<'r, 'static> for AlbumSearchResponse {
 }
 
 impl<'r> Responder<'r, 'static> for DeclareUploadResponse {
+    fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
+        let response = to_json(&self).unwrap();
+        Response::build_from(response.respond_to(request)?)
+            .header(ContentType::new("application", "json"))
+            .status(Status::Ok)
+            .ok()
+    }
+}
+
+impl<'r> Responder<'r, 'static> for PublicPlaylistResponse {
     fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
         let response = to_json(&self).unwrap();
         Response::build_from(response.respond_to(request)?)

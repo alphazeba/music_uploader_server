@@ -15,16 +15,24 @@ use crate::{
     },
 };
 
-const ONE_HOUR_IN_SECONDS: u64 = 60 * 60;
+const ONE_MINUTE_IN_SECONDS: u64 = 60;
+// const ONE_HOUR_IN_SECONDS: u64 = 60 * ONE_MINUTE_IN_SECONDS;
 
 pub fn start_sync_public_playlists() {
     tokio::spawn(sync_public_playlists());
 }
 
+#[derive(serde::Deserialize)]
+#[serde(crate = "rocket::serde")]
+struct DefaultServerConfig {
+    default: ServerConfig,
+}
+
 async fn sync_public_playlists() {
-    let server_config = load_toml::<ServerConfig>("./Rocket.toml");
+    let default_server_config = load_toml::<DefaultServerConfig>("./Rocket.toml");
+    let server_config = default_server_config.default;
     let state = Arc::new(State {
-        plex_base: "test".to_string(),
+        plex_base: server_config.plex_url,
         plex_token: server_config.plex_server_token,
         plex_db_path: server_config.plex_db_dir,
         operational_db_path: server_config.server_operational_db_dir,
@@ -35,7 +43,7 @@ async fn sync_public_playlists() {
             Ok(()) => println!("sync public playlists success"),
             Err(e) => println!("sync public playlists ERROR: {e}"),
         }
-        tokio::time::sleep(Duration::from_secs(ONE_HOUR_IN_SECONDS)).await;
+        tokio::time::sleep(Duration::from_secs(15 * ONE_MINUTE_IN_SECONDS)).await;
     }
 }
 
@@ -48,15 +56,15 @@ struct State {
 
 struct PopulatedUserPlaylist {
     playlist: PlaylistResult,
-    songs: HashSet<String>,
+    songs: HashMap<String, String>,
 }
 
 impl PopulatedUserPlaylist {
-    pub fn id(&self) -> &str {
-        &self.playlist.id
+    pub fn id(&self) -> String {
+        self.playlist.id.to_string()
     }
-    pub fn owner_id(&self) -> &str {
-        &self.playlist.owner_id
+    pub fn owner_id(&self) -> String {
+        self.playlist.owner_id.to_string()
     }
 }
 
@@ -87,6 +95,8 @@ impl Job {
         let plex_db = PlexDb::new(&self.plex_db_path);
         let operational_db = OperationalData::new(&self.operational_db_path);
         let public_user_playlists = Self::get_public_user_playlists(&plex_db)?;
+        let num_public_playlists = public_user_playlists.len();
+        println!("found {num_public_playlists} public playlists");
         let last_known_playlist_states = Self::get_last_known_playlist_states(&operational_db)?;
         // at the end we can delete last known playlist state for playlists still in this list.
         let mut unused_last_known_playlist_titles = last_known_playlist_states
@@ -95,6 +105,7 @@ impl Job {
             .collect::<HashSet<_>>();
 
         for (title, user_playlists) in public_user_playlists {
+            println!("working on public playlist: {title}");
             unused_last_known_playlist_titles.remove(&title);
             let mut populated_user_playlist =
                 self.populate_songs_for_user_playlists(&plex_db, user_playlists)?;
@@ -127,14 +138,6 @@ impl Job {
             )
             .await
             .map_err(|_e| "could not sync users and playlist")?;
-
-            let new_subscriber_ids = populated_user_playlist
-                .iter()
-                .map(|item| item.owner_id().to_string())
-                .collect::<Vec<_>>();
-            let _changes = operational_db
-                .update_last_known_playlist_subscribers(&title, &new_subscriber_ids)
-                .ok_or("could not update playlist subscribers")?;
         }
 
         for unused_playlist in unused_last_known_playlist_titles {
@@ -179,15 +182,10 @@ impl Job {
         user_playlists: &[PopulatedUserPlaylist],
     ) -> Result<(HashSet<String>, Vec<PlaylistToNuke>), String> {
         let init = HashSet::new();
-        let all_songs = user_playlists
-            .iter()
-            .fold(init, |mut sink, playlist| {
-                sink.extend(playlist.songs.iter());
-                sink
-            })
-            .into_iter()
-            .map(String::to_string)
-            .collect::<HashSet<_>>();
+        let all_songs = user_playlists.iter().fold(init, |mut sink, playlist| {
+            sink.extend(playlist.songs.keys().map(String::to_string));
+            sink
+        });
         // create a new known state.
         let user_ids = user_playlists
             .iter()
@@ -214,6 +212,10 @@ impl Job {
         // for each user (that is in subscriber list)
         let mut canonical_song_list = last_known_playlist_state.song_ids.clone();
         let mut playlists_to_nuke = Vec::new();
+        let subscriber_ids = user_playlists
+            .iter()
+            .map(|item| item.owner_id().to_string())
+            .collect::<Vec<_>>();
         for user_playlist in user_playlists {
             let user_id = user_playlist.owner_id().to_string();
             let user_token = user_tokens
@@ -224,8 +226,13 @@ impl Job {
             match is_old_subscriber {
                 true => {
                     // this is an old subscriber.
+                    let user_song_id_set = user_playlist
+                        .songs
+                        .keys()
+                        .map(String::to_string)
+                        .collect::<HashSet<_>>();
                     let song_delta =
-                        get_song_delta(&last_known_playlist_state.song_ids, &user_playlist.songs);
+                        get_song_delta(&last_known_playlist_state.song_ids, &user_song_id_set);
                     // missing songs should be removed from canonical list.
                     for missing_song in &song_delta.missing_songs {
                         canonical_song_list.remove(missing_song);
@@ -250,6 +257,8 @@ impl Job {
                 }
             }
         }
+        let _changes =
+            operational_db.update_last_known_playlist_subscribers(title, &subscriber_ids);
         Ok((canonical_song_list, playlists_to_nuke))
     }
 
@@ -262,10 +271,11 @@ impl Job {
             .into_iter()
             .map(|playlist| {
                 let all_user_songs = plex_db
-                    .get_playlist_songs(&playlist.id)
+                    .get_playlist_songs(&playlist.id.to_string())
                     .map_err(|e| e.to_string())?
                     .into_iter()
-                    .collect::<HashSet<_>>();
+                    .map(|item| (item.song_id.to_string(), item.playlist_id.to_string()))
+                    .collect::<HashMap<_, _>>();
                 Ok(PopulatedUserPlaylist {
                     songs: all_user_songs,
                     playlist,
@@ -282,30 +292,54 @@ impl Job {
         server_identifier: &str,
     ) -> Result<(), ()> {
         for user_playlist in user_playlists {
-            let Some(user) = user_tokens.get(user_playlist.owner_id()) else {
+            let Some(user) = user_tokens.get(&user_playlist.owner_id()) else {
                 println!("could not find user: {}", user_playlist.owner_id());
                 continue;
             };
-            let song_delta = get_song_delta(&song_list, &user_playlist.songs);
-            let songs_to_add = song_delta.missing_songs.into_iter().collect::<Vec<_>>();
-            let songs_to_remove = song_delta.additional_songs.into_iter().collect::<Vec<_>>();
-            self.client
-                .add_songs_to_playlist(
-                    server_identifier,
-                    user_playlist.id(),
-                    &user.access_token,
-                    &songs_to_add,
-                )
-                .await
-                .map_err(|e| println!("could not add songs to user: {e}"))?;
-            self.client
-                .remove_songs_from_playlist(
-                    user_playlist.id(),
-                    &user.access_token,
-                    &songs_to_remove,
-                )
-                .await
-                .map_err(|e| println!("could not remove songs from user: {e}"))?
+            let user_song_id_set = user_playlist
+                .songs
+                .keys()
+                .map(String::to_string)
+                .collect::<HashSet<_>>();
+            let song_delta = get_song_delta(&song_list, &user_song_id_set);
+            let username = &user.username;
+            let num_to_add = song_delta.missing_songs.len();
+            let num_to_remove = song_delta.additional_songs.len();
+            println!("user {username} has {num_to_add} to add & {num_to_remove} to remove");
+            if num_to_add > 0 {
+                let songs_to_add = song_delta.missing_songs.into_iter().collect::<Vec<_>>();
+                self.client
+                    .add_songs_to_playlist(
+                        server_identifier,
+                        &user_playlist.id(),
+                        &user.access_token,
+                        &songs_to_add,
+                    )
+                    .await
+                    .map_err(|e| println!("could not add songs to user: {e}"))?;
+            }
+            if num_to_remove > 0 {
+                let playlist_ids_to_remove = song_delta
+                    .additional_songs
+                    .into_iter()
+                    .filter_map(|song_id| {
+                        let playlist_id = user_playlist.songs.get(&song_id);
+                        if playlist_id.is_none() {
+                            println!("issue: could not find playlist id for {song_id}");
+                        }
+                        playlist_id
+                    })
+                    .map(String::to_string)
+                    .collect::<Vec<_>>();
+                self.client
+                    .remove_songs_from_playlist(
+                        &user_playlist.id(),
+                        &user.access_token,
+                        &playlist_ids_to_remove,
+                    )
+                    .await
+                    .map_err(|e| println!("could not remove songs from user: {e}"))?
+            }
         }
         Ok(())
     }

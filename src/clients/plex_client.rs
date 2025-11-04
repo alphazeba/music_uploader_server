@@ -12,6 +12,7 @@ pub struct PlexClient {
 }
 
 const PLEX_TV_API: &str = "https://plex.tv/api/";
+const MAX_ADD_SONG_BATCH_SIZE: usize = 20;
 
 #[derive(Error, Debug)]
 pub enum PlexClientError {
@@ -101,26 +102,67 @@ impl PlexClient {
         &self,
         server_identifier: &str,
         playlist_id: &str,
-        owner_token: &str,
+        owner_token: &String,
         song_ids: &[String],
     ) -> PlexClientResult<()> {
-        // TODO need to set a maximum number of songs that can be added in a single call.
-        let url = self.build_local_url(&format!("playlists/{playlist_id}/items"))?;
-        let uri = build_song_uri(server_identifier, song_ids);
-        let request = self.http_client.put(url).query(&[("uri", &uri)]);
-        let _result = Self::send_with_token(request, owner_token).await?;
+        let mut starting_index = 0_usize;
+        let num_song_ids = song_ids.len();
+        while starting_index < num_song_ids {
+            let end_index = usize::min(num_song_ids, starting_index + MAX_ADD_SONG_BATCH_SIZE);
+            let song_ids_slice = &song_ids[starting_index..end_index];
+            starting_index = end_index;
+            self.add_songs_to_playlist_inner(
+                server_identifier,
+                playlist_id,
+                owner_token,
+                song_ids_slice,
+            )
+            .await?;
+        }
         Ok(())
     }
 
+    async fn add_songs_to_playlist_inner(
+        &self,
+        server_identifier: &str,
+        playlist_id: &str,
+        owner_token: &String,
+        unchecked_song_ids: &[String],
+    ) -> PlexClientResult<()> {
+        let url = self.build_local_url(&format!("playlists/{playlist_id}/items"))?;
+        let uri = build_song_uri(server_identifier, unchecked_song_ids);
+        println!("adding song uri: {uri} to playlist id: {playlist_id}");
+        println!("using url: {url}");
+        // Todo: it is possible that docs didn't lie and we can call query twice.
+        let request = self
+            .http_client
+            .put(url)
+            .query(&[("uri", &uri), ("X-Plex-Token", owner_token)]);
+        let result = request.send().await.map_err(|e| {
+            PlexClientError::PlexApiSendFailure(format!(
+                "Failed to send add_songs_to_playlist: {e:?}"
+            ))
+        })?;
+        if result.status().is_success() {
+            Ok(())
+        } else {
+            Err(PlexClientError::UnhappyPlexResponse(result))
+        }
+    }
+
+    /// DOES NOT USE song_id/metadata_id/rating_key!
+    /// instead uses playlist_ids which sources from play_queue_generators.id
     pub async fn remove_songs_from_playlist(
         &self,
         playlist_id: &str,
         owner_token: &str,
-        song_ids: &[String],
+        playlist_ids: &[String], // this is wrong
     ) -> PlexClientResult<()> {
+        // TODO. when deleting items from a playlist, you do not use the rating key
+        // you instead use the "playlistId" which is the first column in play_queue_generators.
         let url = self.build_local_url(&format!("playlists/{playlist_id}/items"))?;
-        for song_id in song_ids {
-            let item_url = format!("{url}/{song_id}");
+        for playlist_id in playlist_ids {
+            let item_url = format!("{url}/{playlist_id}");
             let request = self.http_client.delete(item_url);
             let _result = Self::send_with_token(request, owner_token).await?;
         }
@@ -147,4 +189,49 @@ fn build_song_uri(server_identifier: &str, song_ids: &[String]) -> String {
 
 fn build_uri(server_identifier: &str) -> String {
     format!("server://{server_identifier}/com.plexapp.plugins.library")
+}
+
+#[cfg(test)]
+mod tests {
+    use rocket::tokio;
+
+    use crate::clients::plex_client::{PlexClient, PlexClientError};
+
+    #[tokio::test]
+    async fn test_add_song_does_not_get_builder_error() {
+        let client = PlexClient::new("http://urmum", "urmum".to_string());
+        let song_ids = vec!["123".to_string(), "432".to_string()];
+        let Err(e) = client
+            .add_songs_to_playlist("urmum", "123", &"urmum".to_string(), &song_ids)
+            .await
+        else {
+            panic!("should have failed");
+        };
+        match e {
+            PlexClientError::PlexApiSendFailure(message) => {
+                println!("{message}");
+                assert!(message.contains("dns error"));
+            }
+            _ => panic!("wrong error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_add_song_does_not_get_builder_error_2() {
+        let client = PlexClient::new("http://urmum", "urmum".to_string());
+        let song_ids = vec!["123".to_string()];
+        let Err(e) = client
+            .add_songs_to_playlist("urmum", "123", &"urmum".to_string(), &song_ids)
+            .await
+        else {
+            panic!("should have failed");
+        };
+        match e {
+            PlexClientError::PlexApiSendFailure(message) => {
+                println!("{message}");
+                assert!(message.contains("dns error"));
+            }
+            _ => panic!("wrong error"),
+        }
+    }
 }
